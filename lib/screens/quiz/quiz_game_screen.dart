@@ -48,10 +48,14 @@ class _QuizGameScreenState extends State<QuizGameScreen>
   bool _lastAnswerCorrect = false;
   bool _transitioning     = false;
 
-  late final List<int>  _questionSequence;
+  late final List<int> _questionSequence;
 
-  // --- Suivi des questions déjà posées par type (anti-doublon) ---
-  // Chaque Set contient les indices déjà tirés pour ce type
+  // Indices pré-calculés une fois pour toutes au démarrage.
+  // _questionIndices[i] = index dans la base de données pour la question i.
+  // Calculé dans initState → jamais recalculé dans build() → 0 question fantôme.
+  late final List<int> _questionIndices;
+
+  // Suivi des questions déjà utilisées par type (pour éviter les doublons)
   final Map<int, Set<int>> _usedIndices = {
     0: {}, 1: {}, 2: {}, 3: {}, 4: {},
   };
@@ -62,21 +66,29 @@ class _QuizGameScreenState extends State<QuizGameScreen>
   // Cycle de vie
   // ---------------------------------------------------------------------------
 
-  /// Initialise la partie, génère la séquence, lance la musique de quiz.
+  /// Initialise la partie, génère la séquence, pré-calcule tous les indices,
+  /// lance la musique de quiz.
   @override
   void initState() {
     super.initState();
     _questionSequence = _generateSequence();
+    // Pré-calcule un index unique pour CHACUNE des 10 questions dès le départ.
+    // Ainsi build() ne tire jamais de nouvel index → plus de question fantôme.
+    _questionIndices = List.generate(
+      _totalQuestions,
+      (i) => _getNextQuestionIndex(_questionSequence[i]),
+    );
     _scoreAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    // Lance la musique dédiée à la partie (différente du menu)
     settingsManager.startQuizMusic();
   }
 
+  /// Arrête la musique de partie quand on quitte cet écran (quelle que soit la raison).
   @override
   void dispose() {
+    settingsManager.stopMusic();
     _scoreAnim.dispose();
     super.dispose();
   }
@@ -313,13 +325,12 @@ class _QuizGameScreenState extends State<QuizGameScreen>
     );
   }
 
-  /// Retourne le widget du type de question avec l'index unique pré-calculé.
+  /// Retourne le widget du type de question en cours.
+  /// Utilise l'index pré-calculé dans initState → jamais de tirage dans build().
   Widget _buildCurrentQuestion() {
-    final int type = _questionSequence[_currentIndex];
-    // Index unique pour cette question (anti-doublon)
-    final int questionIdx = _getNextQuestionIndex(type);
-    // Clé ValueKey pour forcer la reconstruction à chaque nouvelle question
-    final key = ValueKey('q_${_currentIndex}_${type}_$questionIdx');
+    final int type        = _questionSequence[_currentIndex];
+    final int questionIdx = _questionIndices[_currentIndex]; // ← pré-calculé, stable
+    final key             = ValueKey('q_$_currentIndex');    // clé simple suffit
 
     switch (type) {
       case 0: return QuizTypeInvisible(
