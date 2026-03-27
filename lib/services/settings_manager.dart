@@ -21,11 +21,22 @@ class SettingsManager {
     playerName = _prefs.getString('playerName') ?? "Player";
     
     _musicPlayer.setReleaseMode(ReleaseMode.loop);
+
+    // Écouteur pour reprendre la musique après le son de victoire
+    _effectPlayer.onPlayerComplete.listen((event) {
+      if (isMusicEnabled) {
+        _musicPlayer.resume();
+      }
+    });
   }
 
   void startMusic() async {
     if (isMusicEnabled) {
-      await _musicPlayer.play(AssetSource('sounds/game-sound.mp3'));
+      if (_musicPlayer.state == PlayerState.paused) {
+        await _musicPlayer.resume();
+      } else {
+        await _musicPlayer.play(AssetSource('sounds/game-sound.mp3'));
+      }
     }
   }
 
@@ -39,13 +50,22 @@ class SettingsManager {
     }
   }
 
+  void playWin() async {
+    if (isSoundEnabled) {
+      // On met la musique en pause
+      await _musicPlayer.pause();
+      // On joue le son de victoire
+      await _effectPlayer.play(AssetSource('sounds/victory.mp3'));
+    }
+  }
+
   void toggleMusic(bool value) {
     isMusicEnabled = value;
     _prefs.setBool('music', value);
     if (isMusicEnabled) {
       startMusic();
     } else {
-      stopMusic();
+      _musicPlayer.pause();
     }
   }
 

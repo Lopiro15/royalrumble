@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:royalrumble/screens/car_game_screen.dart';
+import 'package:royalrumble/screens/meteor_game_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
+import 'puzzle_game_screen.dart';
+import 'hanoi_game_screen.dart';
 
 class PlayMenuScreen extends StatelessWidget {
   const PlayMenuScreen({super.key});
@@ -42,7 +46,7 @@ class PlayMenuScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 30),
                         
-                        _buildMenuSection(royalGold, primaryBlue),
+                        _buildMenuSection(context, royalGold, primaryBlue),
                         
                         const Spacer(),
                         
@@ -72,7 +76,7 @@ class PlayMenuScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuSection(Color gold, Color blue) {
+  Widget _buildMenuSection(BuildContext context, Color gold, Color blue) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 30),
       child: Column(
@@ -81,7 +85,14 @@ class PlayMenuScreen extends StatelessWidget {
             label: 'SOLO',
             icon: Icons.person_rounded,
             color: gold,
-            onTap: () => settingsManager.playClick(),
+            onTap: () {
+              settingsManager.playClick();
+              // Pour le test, on lance Hanoi directement
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MeteorGameScreen()),
+              );
+            },
           ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2),
           const SizedBox(height: 15),
           MenuButton(
