@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:royalrumble/screens/game_selection_screen.dart';
 import 'car_game/car_game_screen.dart';
 import 'meteor_game/meteor_game_screen.dart';
 import 'puzzle_game/puzzle_game_screen.dart';
@@ -90,7 +91,7 @@ class PlayMenuScreen extends StatelessWidget {
               // Test : on lance MeteorGame pour l'instant
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const MeteorGameScreen()),
+                MaterialPageRoute(builder: (context) => const GameSelectionScreen()),
               );
             },
           ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2),
