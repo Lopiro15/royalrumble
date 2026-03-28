@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:royalrumble/screens/game_selection_screen.dart';
-import 'car_game/car_game_screen.dart';
-import 'meteor_game/meteor_game_screen.dart';
-import 'puzzle_game/puzzle_game_screen.dart';
-import 'hanoi_game/hanoi_game_screen.dart';
+import 'game_selection_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
 
@@ -88,7 +84,6 @@ class PlayMenuScreen extends StatelessWidget {
             color: gold,
             onTap: () {
               settingsManager.playClick();
-              // Test : on lance MeteorGame pour l'instant
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const GameSelectionScreen()),
@@ -107,7 +102,13 @@ class PlayMenuScreen extends StatelessWidget {
             label: 'ENTRAINEMENT',
             icon: Icons.fitness_center_rounded,
             color: gold,
-            onTap: () => settingsManager.playClick(),
+            onTap: () {
+              settingsManager.playClick();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const GameSelectionScreen()),
+              );
+            },
           ).animate().fadeIn(delay: 600.ms).slideX(begin: -0.2),
           const SizedBox(height: 15),
           MenuButton(
