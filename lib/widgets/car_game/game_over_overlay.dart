@@ -1,0 +1,36 @@
+import 'package:flutter/material.dart';
+import '../../services/car_game/car_flame_game.dart';
+
+class GameOverOverlay extends StatelessWidget {
+  final CarFlameGame game;
+  const GameOverOverlay({super.key, required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(30),
+        decoration: BoxDecoration(
+          color: const Color(0xFF001A33),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFD4AF37), width: 2),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('CRASH ROYAL !', style: TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Text('SCORE: ${game.score}', style: const TextStyle(color: Colors.white, fontSize: 22)),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37)),
+              onPressed: () => game.restart(),
+              child: const Text('REESSAYER', style: TextStyle(color: Color(0xFF001A33))),
+            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('QUITTER', style: TextStyle(color: Colors.white54))),
+          ],
+        ),
+      ),
+    );
+  }
+}

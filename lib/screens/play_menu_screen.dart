@@ -90,7 +90,7 @@ class PlayMenuScreen extends StatelessWidget {
               // Pour le test, on lance Hanoi directement
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const MeteorGameScreen()),
+                MaterialPageRoute(builder: (context) => const PuzzleGameScreen()),
               );
             },
           ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2),
