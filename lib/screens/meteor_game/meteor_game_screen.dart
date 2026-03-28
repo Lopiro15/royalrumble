@@ -1,8 +1,8 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import '../services/meteor_game/meteor_game.dart';
-import '../widgets/meteor_game/game_over_overlay.dart';
-import '../widgets/meteor_game/game_ui.dart';
+import '../../services/meteor_game/meteor_game.dart';
+import '../../widgets/meteor_game/game_over_overlay.dart';
+import '../../widgets/meteor_game/game_ui.dart';
 
 class MeteorGameScreen extends StatelessWidget {
   const MeteorGameScreen({super.key});

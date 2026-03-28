@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:royalrumble/screens/car_game_screen.dart';
-import 'package:royalrumble/screens/meteor_game_screen.dart';
+import 'car_game/car_game_screen.dart';
+import 'meteor_game/meteor_game_screen.dart';
+import 'puzzle_game/puzzle_game_screen.dart';
+import 'hanoi_game/hanoi_game_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
-import 'puzzle_game_screen.dart';
-import 'hanoi_game_screen.dart';
 
 class PlayMenuScreen extends StatelessWidget {
   const PlayMenuScreen({super.key});
@@ -87,10 +87,10 @@ class PlayMenuScreen extends StatelessWidget {
             color: gold,
             onTap: () {
               settingsManager.playClick();
-              // Pour le test, on lance Hanoi directement
+              // Test : on lance MeteorGame pour l'instant
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const PuzzleGameScreen()),
+                MaterialPageRoute(builder: (context) => const MeteorGameScreen()),
               );
             },
           ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2),

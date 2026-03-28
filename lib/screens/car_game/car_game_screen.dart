@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../services/settings_manager.dart';
+import '../../services/settings_manager.dart';
 
 enum ObstacleType { sedan, truck, f1 }
 

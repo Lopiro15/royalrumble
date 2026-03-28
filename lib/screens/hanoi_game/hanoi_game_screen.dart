@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../services/settings_manager.dart';
-import '../widgets/menu_button.dart';
+import '../../services/settings_manager.dart';
+import '../../widgets/menu_button.dart';
 
 class HanoiGameScreen extends StatefulWidget {
   const HanoiGameScreen({super.key});
