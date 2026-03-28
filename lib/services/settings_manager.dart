@@ -7,19 +7,20 @@ class SettingsManager {
   SettingsManager._internal();
 
   late SharedPreferences _prefs;
-  final AudioPlayer _musicPlayer = AudioPlayer();
+
+  // Deux lecteurs séparés : musique (loop) et effets (one-shot)
+  final AudioPlayer _musicPlayer  = AudioPlayer();
   final AudioPlayer _effectPlayer = AudioPlayer();
 
-  bool isMusicEnabled = true;
-  bool isSoundEnabled = true;
-  String playerName = "Player";
+  bool   isMusicEnabled = true;
+  bool   isSoundEnabled = true;
+  String playerName     = 'Player';
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     isMusicEnabled = _prefs.getBool('music') ?? true;
     isSoundEnabled = _prefs.getBool('sound') ?? true;
-    playerName = _prefs.getString('playerName') ?? "Player";
-    
+    playerName     = _prefs.getString('playerName') ?? 'Player';
     _musicPlayer.setReleaseMode(ReleaseMode.loop);
 
     // Écouteur pour reprendre la musique après le son de victoire
@@ -40,6 +41,19 @@ class SettingsManager {
     }
   }
 
+  /// Démarre la musique dédiée à la partie quiz (loop).
+  /// Utilise quiz-music.mp3 si disponible, sinon game-sound.mp3.
+  void startQuizMusic() async {
+    if (!isMusicEnabled) return;
+    try {
+      await _musicPlayer.play(AssetSource('sounds/quiz-music.mp3'));
+    } catch (_) {
+      // Fallback si quiz-music.mp3 n'existe pas encore
+      await _musicPlayer.play(AssetSource('sounds/game-sound.mp3'));
+    }
+  }
+
+  /// Arrête toute musique de fond.
   void stopMusic() async {
     await _musicPlayer.stop();
   }
@@ -59,21 +73,54 @@ class SettingsManager {
     }
   }
 
-  void toggleMusic(bool value) {
-    isMusicEnabled = value;
-    _prefs.setBool('music', value);
-    if (isMusicEnabled) {
-      startMusic();
-    } else {
-      _musicPlayer.pause();
+  /// Son joué au lancement d'une partie (jingle court).
+  void playGameStart() async {
+    if (isSoundEnabled) {
+      await _effectPlayer.play(AssetSource('sounds/game-start.mp3'));
     }
   }
 
+  /// Son "GO !" joué quand le countdown atteint 0 avant le lancement.
+  void playCountdownGo() async {
+    if (isSoundEnabled) {
+      await _effectPlayer.play(AssetSource('sounds/game-start.mp3'));
+    }
+  }
+
+  /// Son de victoire — coupe la musique de fond.
+  void playVictory() async {
+    stopMusic();
+    if (isSoundEnabled) {
+      await _effectPlayer.play(AssetSource('sounds/victory.mp3'));
+    }
+  }
+
+  /// Son de défaite — coupe la musique de fond.
+  void playDefeat() async {
+    stopMusic();
+    if (isSoundEnabled) {
+      await _effectPlayer.play(AssetSource('sounds/losing.mp3'));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Préférences
+  // ---------------------------------------------------------------------------
+
+  /// Active ou désactive la musique de fond.
+  void toggleMusic(bool value) {
+    isMusicEnabled = value;
+    _prefs.setBool('music', value);
+    if (isMusicEnabled) { startMusic(); } else { stopMusic(); }
+  }
+
+  /// Active ou désactive les effets sonores.
   void toggleSound(bool value) {
     isSoundEnabled = value;
     _prefs.setBool('sound', value);
   }
 
+  /// Met à jour le pseudo du joueur.
   void updatePlayerName(String name) {
     playerName = name;
     _prefs.setString('playerName', name);
