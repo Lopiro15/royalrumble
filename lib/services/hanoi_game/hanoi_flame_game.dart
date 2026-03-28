@@ -34,10 +34,10 @@ class HanoiFlameGame extends FlameGame with DragCallbacks {
       pegPositions.add(Vector2(spacing * i, size.y * 0.7));
     }
 
-    _resetGame();
+    resetGame();
   }
 
-  void _resetGame() {
+  void resetGame() {
     for (var p in pegs) {
       for (var d in p) {
         d.removeFromParent();

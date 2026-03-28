@@ -25,7 +25,7 @@ class VictoryOverlay extends StatelessWidget {
             const SizedBox(height: 30),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37)),
-              onPressed: () => game._resetGame(),
+              onPressed: () => game.resetGame(),
               child: const Text('REJOUER', style: TextStyle(color: Color(0xFF001A33))),
             ),
           ],

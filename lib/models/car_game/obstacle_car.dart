@@ -31,7 +31,7 @@ class ObstacleCar extends PositionComponent with HasGameRef<CarFlameGame>, Colli
 
     if (position.y > gameRef.size.y + 100) {
       if (!overtaken) {
-        gameRef.score.value += (type == ObstacleType.f1 ? 2 : 1);
+        gameRef.score += (type == ObstacleType.f1 ? 2 : 1);
         overtaken = true;
       }
       removeFromParent();

@@ -13,10 +13,10 @@ class PuzzleFlameGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     tileSize = size.x < size.y ? (size.x - 40) / gridSize : (size.y - 150) / gridSize;
-    _resetGame();
+    resetGame();
   }
 
-  void _resetGame() {
+  void resetGame() {
     tiles = List.generate(gridSize * gridSize, (index) => index);
     _shuffle();
     _refreshComponents();
