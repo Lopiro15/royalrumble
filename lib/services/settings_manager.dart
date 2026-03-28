@@ -79,6 +79,13 @@ class SettingsManager {
     }
   }
 
+  void playCountdownGo() async {
+    if (isSoundEnabled) {
+      await _effectPlayer.play(AssetSource('sounds/game-start.mp3'));
+    }
+  }
+
+
   /// Son de défaite — coupe la musique de fond.
   void playDefeat() async {
     stopMusic();
