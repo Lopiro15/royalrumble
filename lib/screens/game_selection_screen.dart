@@ -4,9 +4,10 @@ import 'car_game/car_game_screen.dart';
 import 'meteor_game/meteor_game_screen.dart';
 import 'puzzle_game/puzzle_game_screen.dart';
 import 'hanoi_game/hanoi_game_screen.dart';
+import 'labyrinth_game/labyrinth_game_screen.dart';
 import 'quiz/quiz_game_screen.dart';
-import '../../services/settings_manager.dart';
-import '../../widgets/menu_button.dart';
+import '../services/settings_manager.dart';
+import '../widgets/menu_button.dart';
 
 class GameSelectionScreen extends StatelessWidget {
   const GameSelectionScreen({super.key});
@@ -39,6 +40,12 @@ class GameSelectionScreen extends StatelessWidget {
         'label': 'TOUR D\'HANOI',
         'icon': Icons.layers_rounded,
         'screen': const HanoiGameScreen(),
+        'color': royalGold,
+      },
+      {
+        'label': 'LABYRINTH ROYAL',
+        'icon': Icons.explore_rounded,
+        'screen': const LabyrinthGameScreen(),
         'color': royalGold,
       },
       {
