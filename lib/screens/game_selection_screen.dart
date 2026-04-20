@@ -5,6 +5,7 @@ import 'meteor_game/meteor_game_screen.dart';
 import 'puzzle_game/puzzle_game_screen.dart';
 import 'hanoi_game/hanoi_game_screen.dart';
 import 'labyrinth_game/labyrinth_game_screen.dart';
+import 'square_game/square_game_screen.dart';
 import 'quiz/quiz_game_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
@@ -49,9 +50,15 @@ class GameSelectionScreen extends StatelessWidget {
         'color': royalGold,
       },
       {
+        'label': 'SQUARE CONQUEST',
+        'icon': Icons.grid_view_rounded,
+        'screen': const SquareGameScreen(vsBot: true),
+        'color': royalGold,
+      },
+      {
         'label': 'QUIZ ROYAL',
         'icon': Icons.quiz_rounded,
-        'screen': const QuizGameScreen(gameMode: 'SOLO',),
+        'screen': const QuizGameScreen(gameMode: 'SOLO'),
         'color': Colors.white.withOpacity(0.9),
         'textColor': primaryBlue,
       },
