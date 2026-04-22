@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:royalrumble/screens/quiz/quiz_tutorial_screen.dart';
 import 'car_game/car_game_screen.dart';
 import 'meteor_game/meteor_game_screen.dart';
 import 'puzzle_game/puzzle_game_screen.dart';
@@ -58,7 +59,7 @@ class GameSelectionScreen extends StatelessWidget {
       {
         'label': 'QUIZ ROYAL',
         'icon': Icons.quiz_rounded,
-        'screen': const QuizGameScreen(gameMode: 'SOLO'),
+        'screen': const QuizTutorialScreen(gameMode: 'SOLO'),
         'color': Colors.white.withOpacity(0.9),
         'textColor': primaryBlue,
       },
