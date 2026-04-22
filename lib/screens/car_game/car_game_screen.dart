@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
+import '../../widgets/countdown_overlay.dart';
 
 enum ObstacleType { sedan, truck, f1 }
 
@@ -27,16 +28,17 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   int score = 0;
   int secondsElapsed = 0;
   Timer? chronoTimer;
-  
-  double gameSpeed = 8.0; 
+  bool _showCountdown = true;
+
+  double gameSpeed = 8.0;
   double roadOffset = 0;
   int playerLane = 1;
   bool isJumping = false;
   bool isGameOver = false;
-  
+
   List<Obstacle> obstacles = [];
   final Random random = Random();
-  
+
   late AnimationController _jumpController;
 
   @override
@@ -46,7 +48,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _startGame();
+    // _startGame();
   }
 
   void _startGame() {
@@ -58,7 +60,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
     isJumping = false;
     isGameOver = false;
     obstacles.clear();
-    
+
     chronoTimer?.cancel();
     chronoTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isGameOver) {
@@ -85,7 +87,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
 
       for (var obs in obstacles) {
         double speedMultiplier = obs.type == ObstacleType.f1 ? 2.0 : 1.2;
-        obs.y += gameSpeed * speedMultiplier; 
+        obs.y += gameSpeed * speedMultiplier;
       }
 
       obstacles.removeWhere((obs) {
@@ -105,14 +107,14 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
         int count = spawnChance < 0.4 ? 1 : (spawnChance < 0.8 ? 2 : 3);
 
         List<int> availableLanes = [0, 1, 2, 3]..shuffle();
-        
+
         // Déterminer le style de la vague (Formation)
         double formationRand = random.nextDouble();
         double baseY = -350.0;
 
         for (int i = 0; i < count; i++) {
           int lane = availableLanes[i];
-          
+
           double randType = random.nextDouble();
           ObstacleType type = randType > 0.92 ? ObstacleType.f1 : (randType > 0.7 ? ObstacleType.truck : ObstacleType.sedan);
 
@@ -250,6 +252,13 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
             ...obstacles.map((obs) => _buildObstacleWidget(obs)),
             _buildPlayerWidget(),
             _buildUI(),
+            if (_showCountdown)
+              CountdownOverlay(
+                onFinished: () {
+                  setState(() => _showCountdown = false);
+                  _startGame();
+                },
+              ),
           ],
         ),
       ),
@@ -318,8 +327,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
             color: isTruck ? Colors.transparent : (isF1 ? Colors.greenAccent : Colors.white),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: isTruck 
-            ? _buildTruckDetails() 
+          child: isTruck
+            ? _buildTruckDetails()
             : (isF1 ? _buildF1Details() : _buildCarDetails(Colors.white)),
         ),
       ),
@@ -452,7 +461,7 @@ class RoadPainter extends CustomPainter {
         canvas.drawLine(Offset(x, startY), Offset(x, startY + dashHeight), paint);
         startY += dashHeight + dashSpace;
       }
-      
+
       double backY = startY - (dashHeight + dashSpace);
       while (backY > -dashHeight) {
         canvas.drawLine(Offset(x, backY), Offset(x, backY + dashHeight), paint);

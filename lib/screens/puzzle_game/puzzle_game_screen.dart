@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
+import '../../widgets/countdown_overlay.dart';
 import '../../widgets/menu_button.dart';
 
 class PuzzleGameScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class PuzzleGameScreen extends StatefulWidget {
 class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   static const int gridSize = 3;
   static const double puzzleSize = 300.0;
+  bool _showCountdown = true;
   late List<int> tiles;
   int moves = 0;
   int secondsElapsed = 0;
@@ -25,7 +27,7 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   @override
   void initState() {
     super.initState();
-    _resetGame();
+    tiles = List.generate(gridSize * gridSize, (index) => index);
   }
 
   void _resetGame() {
@@ -179,40 +181,42 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
           )
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF002147), primaryBlue],
-          ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildInfoCard('COUPS', moves.toString()),
-                _buildInfoCard('TEMPS', _formatTime(secondsElapsed)),
-              ],
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF002147), primaryBlue],
+              ),
             ),
-            const SizedBox(height: 20),
-            Center(
-              child: Container(
-                width: puzzleSize,
-                height: puzzleSize,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: royalGold.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildInfoCard('COUPS', moves.toString()),
+                    _buildInfoCard('TEMPS', _formatTime(secondsElapsed)),
+                  ],
                 ),
-                child: showOriginal
-                  ? ClipRRect(
+                const SizedBox(height: 20),
+                Center(
+                  child: Container(
+                    width: puzzleSize,
+                    height: puzzleSize,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: royalGold.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: showOriginal
+                        ? ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: Image.asset('assets/logo.png', fit: BoxFit.fill),
                     ).animate().fadeIn()
-                  : GridView.builder(
+                        : GridView.builder(
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: gridSize,
@@ -224,7 +228,7 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                         int tileValue = tiles[index];
 
                         if (isWon && tileValue == 8) {
-                           return Container(
+                          return Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: royalGold, width: 1),
@@ -261,22 +265,32 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                         );
                       },
                     ),
-              ),
+                  ),
+                ),
+                // const Spacer(),
+                // Padding(
+                //   padding: const EdgeInsets.all(30),
+                //   child: MenuButton(
+                //     label: 'RECOMMENCER',
+                //     icon: Icons.refresh_rounded,
+                //     color: Colors.white10,
+                //     fontSize: 18,
+                //     onTap: _resetGame,
+                //   ),
+                // ),
+              ],
             ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.all(30),
-              child: MenuButton(
-                label: 'RECOMMENCER',
-                icon: Icons.refresh_rounded,
-                color: Colors.white10,
-                fontSize: 18,
-                onTap: _resetGame,
-              ),
+          ),
+          if (_showCountdown)
+            CountdownOverlay(
+              onFinished: () {
+                setState(() => _showCountdown = false);
+                _resetGame();
+                _startTimer();
+              },
             ),
-          ],
-        ),
-      ),
+        ],
+      )
     );
   }
 

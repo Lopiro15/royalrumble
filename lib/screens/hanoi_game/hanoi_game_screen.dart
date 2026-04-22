@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
+import '../../widgets/countdown_overlay.dart';
 import '../../widgets/menu_button.dart';
 
 class HanoiGameScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class HanoiGameScreen extends StatefulWidget {
 
 class _HanoiGameScreenState extends State<HanoiGameScreen> {
   late int numDisks;
+  bool _showCountdown = true;
   late List<List<int>> pegs;
   late List<Color> diskColors;
   int moves = 0;
@@ -35,11 +37,12 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   @override
   void initState() {
     super.initState();
+    numDisks = Random().nextInt(3) + 4;
     _resetGame();
   }
 
   void _resetGame() {
-    numDisks = Random().nextInt(3) + 4; // Entre 4 et 6
+    //numDisks = Random().nextInt(3) + 4; // Entre 4 et 6
     pegs = [
       List.generate(numDisks, (i) => numDisks - i),
       [],
@@ -161,48 +164,60 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF002147), primaryBlue],
-          ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF002147), primaryBlue],
+              ),
+            ),
+            child: Column(
               children: [
-                _buildInfoCard('COUPS', moves.toString()),
-                _buildInfoCard('TEMPS', _formatTime(secondsElapsed)),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildInfoCard('COUPS', moves.toString()),
+                    _buildInfoCard('TEMPS', _formatTime(secondsElapsed)),
+                  ],
+                ),
+                const Spacer(),
+                // Zone de jeu avec Drag and Drop
+                SizedBox(
+                  height: 350,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(3, (index) => _buildPegTarget(index, royalGold)),
+                  ),
+                ),
+                 const Spacer(),
+                // Padding(
+                //   padding: const EdgeInsets.all(30),
+                //   child: MenuButton(
+                //     label: 'RECOMMENCER',
+                //     icon: Icons.refresh_rounded,
+                //     color: Colors.white10,
+                //     fontSize: 18,
+                //     onTap: _resetGame,
+                //   ),
+                // ),
               ],
             ),
-            const Spacer(),
-            // Zone de jeu avec Drag and Drop
-            SizedBox(
-              height: 350,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(3, (index) => _buildPegTarget(index, royalGold)),
-              ),
+          ),
+          if (_showCountdown)
+            CountdownOverlay(
+              onFinished: () {
+                setState(() => _showCountdown = false);
+                _resetGame();
+                _startTimer();
+              },
             ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.all(30),
-              child: MenuButton(
-                label: 'RECOMMENCER',
-                icon: Icons.refresh_rounded,
-                color: Colors.white10,
-                fontSize: 18,
-                onTap: _resetGame,
-              ),
-            ),
-          ],
-        ),
-      ),
+        ],
+      )
     );
   }
 
