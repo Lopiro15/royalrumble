@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'services/settings_manager.dart';
@@ -7,6 +8,10 @@ import 'widgets/menu_button.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Activer le mode plein écran immersif (cache barres système et navigation)
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
   await settingsManager.init();
   runApp(const MyApp());
 }

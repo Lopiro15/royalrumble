@@ -7,7 +7,7 @@ import 'puzzle_game/puzzle_game_screen.dart';
 import 'hanoi_game/hanoi_game_screen.dart';
 import 'labyrinth_game/labyrinth_game_screen.dart';
 import 'square_game/square_game_screen.dart';
-import 'quiz/quiz_game_screen.dart';
+import 'air_hockey/air_hockey_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
 
@@ -54,6 +54,12 @@ class GameSelectionScreen extends StatelessWidget {
         'label': 'SQUARE CONQUEST',
         'icon': Icons.grid_view_rounded,
         'screen': const SquareGameScreen(vsBot: true),
+        'color': royalGold,
+      },
+      {
+        'label': 'AIR HOCKEY',
+        'icon': Icons.sports_hockey_rounded,
+        'screen': const AirHockeyScreen(vsBot: true),
         'color': royalGold,
       },
       {
@@ -104,7 +110,7 @@ class GameSelectionScreen extends StatelessWidget {
                     settingsManager.playClick();
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => game['screen']),
+                      MaterialPageRoute(builder: (context) => game['screen'] as Widget),
                     );
                   },
                 ).animate().fadeIn(delay: (100 * index).ms).slideX(begin: index % 2 == 0 ? -0.2 : 0.2);
