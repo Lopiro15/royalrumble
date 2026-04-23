@@ -6,7 +6,9 @@ import '../../widgets/countdown_overlay.dart';
 import '../../widgets/menu_button.dart';
 
 class PuzzleGameScreen extends StatefulWidget {
-  const PuzzleGameScreen({super.key});
+  final Function(int score, int maxScore)? onSoloGameFinished;
+
+  const PuzzleGameScreen({super.key, this.onSoloGameFinished});
 
   @override
   State<PuzzleGameScreen> createState() => _PuzzleGameScreenState();
@@ -23,6 +25,10 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   bool isGameStarted = false;
   bool isWon = false;
   bool showOriginal = false;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Puzzle (calculé à la victoire)
+  int get _calculatedMaxScore => 1000;
 
   @override
   void initState() {
@@ -37,6 +43,7 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
     isWon = false;
     isGameStarted = false;
     showOriginal = false;
+    _hasNotifiedSolo = false;
     timer?.cancel();
     _shuffleTiles();
     setState(() {});
@@ -89,6 +96,14 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
     }
   }
 
+  int _calculateScore() {
+    // Score basé sur le temps et le nombre de coups
+    // Moins de temps et moins de coups = meilleur score
+    int timePenalty = (secondsElapsed * 2).clamp(0, 500);
+    int movePenalty = (moves * 5).clamp(0, 300);
+    return (_calculatedMaxScore - timePenalty - movePenalty).clamp(100, _calculatedMaxScore);
+  }
+
   void _checkWin() {
     bool win = true;
     for (int i = 0; i < tiles.length; i++) {
@@ -98,18 +113,29 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
       }
     }
     if (win) {
-      settingsManager.playWin(); // Jouer le son de victoire
+      settingsManager.playWin();
       setState(() {
         isWon = true;
         timer?.cancel();
       });
-      Future.delayed(Duration(seconds: 2), () {
-        _showWinDialog();
+
+      final int finalScore = _calculateScore();
+
+      // Notifier le mode solo
+      if (widget.onSoloGameFinished != null && !_hasNotifiedSolo) {
+        _hasNotifiedSolo = true;
+        widget.onSoloGameFinished!(finalScore, _calculatedMaxScore);
+      }
+
+      Future.delayed(const Duration(seconds: 2), () {
+        _showWinDialog(finalScore);
       });
     }
   }
 
-  void _showWinDialog() {
+  void _showWinDialog(int finalScore) {
+    final bool isSoloMode = widget.onSoloGameFinished != null;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -122,25 +148,33 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
           children: [
             const Icon(Icons.emoji_events, color: Color(0xFFD4AF37), size: 60).animate().scale(duration: 600.ms).then().shake(),
             const SizedBox(height: 20),
-            Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-            Text('COUPS : $moves', style: const TextStyle(color: Colors.white, fontSize: 18)),
+            Text('SCORE: $finalScore', style: const TextStyle(color: Colors.white, fontSize: 18)),
+            Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            Text('COUPS : $moves', style: const TextStyle(color: Colors.white70, fontSize: 16)),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _resetGame();
-            },
-            child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('MENU', style: TextStyle(color: Colors.white70)),
-          ),
+          if (isSoloMode) ...[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37))),
+            ),
+          ] else ...[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetGame();
+              },
+              child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('MENU', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
         ],
       ),
     );
@@ -267,17 +301,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                     ),
                   ),
                 ),
-                // const Spacer(),
-                // Padding(
-                //   padding: const EdgeInsets.all(30),
-                //   child: MenuButton(
-                //     label: 'RECOMMENCER',
-                //     icon: Icons.refresh_rounded,
-                //     color: Colors.white10,
-                //     fontSize: 18,
-                //     onTap: _resetGame,
-                //   ),
-                // ),
               ],
             ),
           ),
@@ -290,7 +313,7 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
               },
             ),
         ],
-      )
+      ),
     );
   }
 

@@ -5,7 +5,9 @@ import '../../widgets/labyrinth_game/victory_overlay.dart';
 import '../../widgets/countdown_overlay.dart';
 
 class LabyrinthGameScreen extends StatefulWidget {
-  const LabyrinthGameScreen({super.key});
+  final Function(int score, int maxScore)? onSoloGameFinished;
+
+  const LabyrinthGameScreen({super.key, this.onSoloGameFinished});
 
   @override
   State<LabyrinthGameScreen> createState() => _LabyrinthGameScreenState();
@@ -18,7 +20,7 @@ class _LabyrinthGameScreenState extends State<LabyrinthGameScreen> {
   @override
   void initState() {
     super.initState();
-    game = LabyrinthGame();
+    game = LabyrinthGame(onSoloGameFinished: widget.onSoloGameFinished);
     game.pauseEngine();
   }
 
@@ -30,7 +32,10 @@ class _LabyrinthGameScreenState extends State<LabyrinthGameScreen> {
           GameWidget(
             game: game,
             overlayBuilderMap: {
-              'Victory': (context, LabyrinthGame g) => VictoryOverlay(game: g),
+              'Victory': (context, LabyrinthGame g) => VictoryOverlay(
+                game: g,
+                onSoloGameFinished: widget.onSoloGameFinished,
+              ),
             },
           ),
           if (_showCountdown)

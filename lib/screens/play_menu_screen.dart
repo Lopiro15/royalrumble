@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:royalrumble/screens/solo_game_runner_screen.dart';
 import 'game_selection_screen.dart';
 import '../services/settings_manager.dart';
 import '../widgets/menu_button.dart';
@@ -86,7 +87,7 @@ class PlayMenuScreen extends StatelessWidget {
               settingsManager.playClick();
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const GameSelectionScreen()),
+                MaterialPageRoute(builder: (context) => const SoloGameRunnerScreen()),
               );
             },
           ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2),

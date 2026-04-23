@@ -8,7 +8,6 @@ class SettingsManager {
 
   late SharedPreferences _prefs;
 
-  // Deux lecteurs séparés : musique (loop) et effets (one-shot)
   final AudioPlayer _musicPlayer  = AudioPlayer();
   final AudioPlayer _effectPlayer = AudioPlayer();
 
@@ -27,7 +26,7 @@ class SettingsManager {
   void startMusic() async {
     if (!isMusicEnabled) return;
     if (_musicPlayer.state == PlayerState.playing) return;
-    
+
     if (_musicPlayer.state == PlayerState.paused) {
       await _musicPlayer.resume();
     } else {
@@ -35,7 +34,6 @@ class SettingsManager {
     }
   }
 
-  /// Démarre la musique dédiée au quiz.
   void startQuizMusic() async {
     if (!isMusicEnabled) return;
     await _musicPlayer.play(AssetSource('sounds/quiz-music.mp3'));
@@ -71,7 +69,6 @@ class SettingsManager {
     }
   }
 
-  /// Son de victoire — coupe la musique de fond.
   void playVictory() async {
     stopMusic();
     if (isSoundEnabled) {
@@ -85,18 +82,12 @@ class SettingsManager {
     }
   }
 
-
-  /// Son de défaite — coupe la musique de fond.
   void playDefeat() async {
     stopMusic();
     if (isSoundEnabled) {
       await _effectPlayer.play(AssetSource('sounds/losing.mp3'));
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Préférences
-  // ---------------------------------------------------------------------------
 
   void toggleMusic(bool value) {
     isMusicEnabled = value;

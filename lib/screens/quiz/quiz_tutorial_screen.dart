@@ -6,16 +6,16 @@ import 'quiz_game_screen.dart';
 
 // ---------------------------------------------------------------------------
 // QuizTutorialScreen — Tutoriel + compte à rebours avant la partie
-//
-// Flux :
-//   1. 5 slides swipables (une par type de quiz)
-//   2. Bouton READY ou PASSER → countdown 3-2-1 GO
-//   3. Bip sonore à chaque chiffre du countdown
-//   4. Navigation vers QuizGameScreen avec transition slide-up
 // ---------------------------------------------------------------------------
 class QuizTutorialScreen extends StatefulWidget {
   final String gameMode;
-  const QuizTutorialScreen({super.key, required this.gameMode});
+  final Function(int score, int maxScore)? onSoloGameFinished;
+
+  const QuizTutorialScreen({
+    super.key,
+    required this.gameMode,
+    this.onSoloGameFinished,
+  });
 
   @override
   State<QuizTutorialScreen> createState() => _QuizTutorialScreenState();
@@ -96,11 +96,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // Logique
-  // ---------------------------------------------------------------------------
-
-  /// Passe à la slide suivante ou lance le READY si dernière slide.
   void _nextPage() {
     settingsManager.playClick();
     if (_currentPage < _slides.length - 1) {
@@ -113,13 +108,11 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     }
   }
 
-  /// Saute le tutoriel et lance directement le countdown.
   void _skipTutorial() {
     settingsManager.playClick();
     _startCountdown();
   }
 
-  /// Lance le compte à rebours 3 → 2 → 1 → GO (silencieux sauf le GO).
   void _startCountdown() {
     setState(() { _showCountdown = true; _countdownVal = 3; });
     _animateCountdownNumber();
@@ -131,21 +124,21 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
       if (_countdownVal > 0) {
         _animateCountdownNumber();
       } else {
-        // Son GO ! au lancement de la partie
         settingsManager.playCountdownGo();
         _animateCountdownNumber();
         t.cancel();
 
-        // Courte pause sur "GO !" puis lancement
         Future.delayed(const Duration(milliseconds: 800), () {
           if (!mounted) return;
-          // Arrête la musique menu, lance la musique de partie
           settingsManager.stopMusic();
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (_, __, ___) =>
-                  QuizGameScreen(gameMode: widget.gameMode),
+                  QuizGameScreen(
+                    gameMode: widget.gameMode,
+                    onSoloGameFinished: widget.onSoloGameFinished,
+                  ),
               transitionsBuilder: (_, anim, __, child) => SlideTransition(
                 position: Tween<Offset>(
                   begin: const Offset(0, 1),
@@ -164,15 +157,10 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     });
   }
 
-  /// Joue l'animation bounce sur le chiffre actuel.
   void _animateCountdownNumber() {
     _countdownAnim.reset();
     _countdownAnim.forward();
   }
-
-  // ---------------------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +185,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     );
   }
 
-  /// Construit le tutoriel swipable.
   Widget _buildTutorial() {
     return SafeArea(
       child: Column(
@@ -222,7 +209,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     );
   }
 
-  /// En-tête avec titre et bouton PASSER.
   Widget _buildTutorialHeader() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -249,7 +235,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     ).animate().fadeIn(duration: 300.ms);
   }
 
-  /// Points de pagination colorés.
   Widget _buildPageIndicators() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -269,7 +254,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     );
   }
 
-  /// Slide individuelle avec icône, règle, exemple, astuce.
   Widget _buildSlide(BuildContext context, Map<String, dynamic> data) {
     final Color accent = data['color'] as Color;
     return SingleChildScrollView(
@@ -285,7 +269,7 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
           )
               .animate(onPlay: (c) => c.repeat(reverse: true))
               .scale(begin: const Offset(0.92, 0.92), end: const Offset(1.08, 1.08),
-                  duration: 1800.ms, curve: Curves.easeInOut),
+              duration: 1800.ms, curve: Curves.easeInOut),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
@@ -337,7 +321,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     );
   }
 
-  /// Bouton SUIVANT ou 🚀 JE SUIS PRÊT.
   Widget _buildNextButton() {
     final bool   isLast   = _currentPage == _slides.length - 1;
     final Color  accent   = _slides[_currentPage]['color'] as Color;
@@ -367,7 +350,6 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
     );
   }
 
-  /// Countdown 3 → 2 → 1 → GO ! avec animation bounce.
   Widget _buildCountdown() {
     final bool   isGo  = _countdownVal <= 0;
     final String label = isGo ? 'GO !' : '$_countdownVal';
@@ -379,14 +361,14 @@ class _QuizTutorialScreenState extends State<QuizTutorialScreen>
         children: [
           Text('PRÉPARE-TOI...',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 16, letterSpacing: 3)),
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 16, letterSpacing: 3)),
           const SizedBox(height: 40),
           AnimatedBuilder(
             animation: _countdownAnim,
             builder: (_, __) {
               final double scale =
-                  Curves.elasticOut.transform(_countdownAnim.value);
+              Curves.elasticOut.transform(_countdownAnim.value);
               return Transform.scale(
                 scale: 0.4 + scale * 0.8,
                 child: Text(

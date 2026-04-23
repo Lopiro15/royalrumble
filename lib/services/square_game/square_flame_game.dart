@@ -7,22 +7,29 @@ import '../settings_manager.dart';
 enum Player { none, p1, p2 }
 
 class SquareFlameGame extends FlameGame with TapCallbacks {
-  static const int gridSize = 7; // 7x7 points -> 6x6 carrés
+  static const int gridSize = 7;
   late double cellSpacing;
   late double startX;
   late double startY;
 
-  // État du jeu
   final List<List<Player>> dotOwners = List.generate(gridSize, (_) => List.filled(gridSize, Player.none));
   final List<List<Player>> squareOwners = List.generate(gridSize - 1, (_) => List.filled(gridSize - 1, Player.none));
-  
+
   Player currentPlayer = Player.p1;
   final ValueNotifier<int> p1Score = ValueNotifier(0);
   final ValueNotifier<int> p2Score = ValueNotifier(0);
   final ValueNotifier<Player> turnNotifier = ValueNotifier(Player.p1);
-  
+
   bool isVsBot = true;
   bool isGameOver = false;
+
+  final Function(int score, int maxScore)? onSoloGameFinished;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Square Conquest (6x6 = 36 carrés)
+  static const int maxPossibleScore = 36;
+
+  SquareFlameGame({this.onSoloGameFinished});
 
   @override
   Future<void> onLoad() async {
@@ -33,14 +40,12 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
-    // Fond
     canvas.drawRect(size.toRect(), Paint()..color = const Color(0xFF000814));
 
-    final paintP1 = Paint()..color = const Color(0xFFD4AF37); // Or
+    final paintP1 = Paint()..color = const Color(0xFFD4AF37);
     final paintP2 = Paint()..color = Colors.blueAccent;
     final paintNone = Paint()..color = Colors.white10;
 
-    // 1. Dessiner les zones capturées
     for (int r = 0; r < gridSize - 1; r++) {
       for (int c = 0; c < gridSize - 1; c++) {
         if (squareOwners[r][c] != Player.none) {
@@ -58,21 +63,19 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
       }
     }
 
-    // 2. Dessiner la grille (lignes discrètes)
     final linePaint = Paint()..color = Colors.white.withOpacity(0.05)..strokeWidth = 1;
     for (int i = 0; i < gridSize; i++) {
       canvas.drawLine(Offset(startX, startY + i * cellSpacing), Offset(startX + (gridSize-1) * cellSpacing, startY + i * cellSpacing), linePaint);
       canvas.drawLine(Offset(startX + i * cellSpacing, startY), Offset(startX + i * cellSpacing, startY + (gridSize-1) * cellSpacing), linePaint);
     }
 
-    // 3. Dessiner les points
     for (int r = 0; r < gridSize; r++) {
       for (int c = 0; c < gridSize; c++) {
         final pos = Offset(startX + c * cellSpacing, startY + r * cellSpacing);
         Paint dotPaint = paintNone;
         if (dotOwners[r][c] == Player.p1) dotPaint = paintP1;
         if (dotOwners[r][c] == Player.p2) dotPaint = paintP2;
-        
+
         canvas.drawCircle(pos, dotOwners[r][c] == Player.none ? 4 : 8, dotPaint);
         if (dotOwners[r][c] != Player.none) {
           canvas.drawCircle(pos, 10, Paint()..color = dotPaint.color.withOpacity(0.2)..style = PaintingStyle.stroke..strokeWidth = 2);
@@ -90,7 +93,6 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
   }
 
   void _handleTap(Vector2 tapPos) {
-    // Trouver le point le plus proche
     int? bestR, bestC;
     double minDist = 30;
 
@@ -115,13 +117,13 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     dotOwners[r][c] = currentPlayer;
     settingsManager.playClick();
     _checkNewSquares(r, c);
-    
+
     if (_isGridFull()) {
       _endGame();
     } else {
       currentPlayer = (currentPlayer == Player.p1) ? Player.p2 : Player.p1;
       turnNotifier.value = currentPlayer;
-      
+
       if (isVsBot && currentPlayer == Player.p2) {
         Future.delayed(const Duration(milliseconds: 600), _botMove);
       }
@@ -129,14 +131,9 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
   }
 
   void _checkNewSquares(int r, int c) {
-    // Un point peut compléter jusqu'à 4 carrés
-    // Carré en haut à gauche du point
     if (r > 0 && c > 0) _evaluateSquare(r - 1, c - 1);
-    // Carré en haut à droite
     if (r > 0 && c < gridSize - 1) _evaluateSquare(r - 1, c);
-    // Carré en bas à gauche
     if (r < gridSize - 1 && c > 0) _evaluateSquare(r, c - 1);
-    // Carré en bas à droite
     if (r < gridSize - 1 && c < gridSize - 1) _evaluateSquare(r, c);
   }
 
@@ -150,14 +147,13 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
 
     if (p1 != Player.none && p1 == p2 && p1 == p3 && p1 == p4) {
       squareOwners[r][c] = p1;
-      if (p1 == Player.p1) p1Score.value++; else p2Score.value++;
+      if (p1 == Player.p1) this.p1Score.value++; else this.p2Score.value++;
     }
   }
 
   void _botMove() {
     if (isGameOver) return;
-    
-    // IA Simple : 1. Chercher un coup qui complète un carré, 2. Bloquer l'adversaire, 3. Aléatoire
+
     List<Point<int>> available = [];
     for (int r = 0; r < gridSize; r++) {
       for (int c = 0; c < gridSize; c++) {
@@ -179,12 +175,21 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
   }
 
   void _endGame() {
+    if (isGameOver) return;
     isGameOver = true;
+
     if (p1Score.value > p2Score.value) {
       settingsManager.playVictory();
     } else {
       settingsManager.playDefeat();
     }
+
+    // Notifier le mode solo
+    if (onSoloGameFinished != null && !_hasNotifiedSolo) {
+      _hasNotifiedSolo = true;
+      onSoloGameFinished!(p1Score.value, maxPossibleScore);
+    }
+
     overlays.add('GameOver');
   }
 
@@ -200,6 +205,7 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     currentPlayer = Player.p1;
     turnNotifier.value = Player.p1;
     isGameOver = false;
+    _hasNotifiedSolo = false;
     overlays.remove('GameOver');
     resumeEngine();
   }

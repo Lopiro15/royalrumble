@@ -17,7 +17,9 @@ class Obstacle {
 }
 
 class CarGameScreen extends StatefulWidget {
-  const CarGameScreen({super.key});
+  final Function(int score, int maxScore)? onSoloGameFinished;
+
+  const CarGameScreen({super.key, this.onSoloGameFinished});
 
   @override
   State<CarGameScreen> createState() => _CarGameScreenState();
@@ -35,11 +37,15 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   int playerLane = 1;
   bool isJumping = false;
   bool isGameOver = false;
+  bool _hasNotifiedSolo = false;
 
   List<Obstacle> obstacles = [];
   final Random random = Random();
 
   late AnimationController _jumpController;
+
+  // Score maximum approximatif pour Car Royal (basé sur le temps)
+  static const int maxPossibleScore = 1000;
 
   @override
   void initState() {
@@ -48,7 +54,6 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    // _startGame();
   }
 
   void _startGame() {
@@ -59,6 +64,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
     playerLane = 1;
     isJumping = false;
     isGameOver = false;
+    _hasNotifiedSolo = false;
     obstacles.clear();
 
     chronoTimer?.cancel();
@@ -101,14 +107,11 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
         return false;
       });
 
-      // Logique d'apparition par vagues structurées
       if (obstacles.isEmpty || (obstacles.last.y > 500 && random.nextDouble() < 0.06)) {
         double spawnChance = random.nextDouble();
         int count = spawnChance < 0.4 ? 1 : (spawnChance < 0.8 ? 2 : 3);
 
         List<int> availableLanes = [0, 1, 2, 3]..shuffle();
-
-        // Déterminer le style de la vague (Formation)
         double formationRand = random.nextDouble();
         double baseY = -350.0;
 
@@ -120,13 +123,10 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
 
           double yOffset;
           if (formationRand < 0.35) {
-            // FORMATION 1 : "LE MUR" (Serré) -> Slalom impossible entre les voitures de la vague
             yOffset = random.nextDouble() * 30.0;
           } else if (formationRand < 0.75) {
-            // FORMATION 2 : "LA CHICANE" (Moyen) -> Slalom technique
             yOffset = i * (120.0 + random.nextDouble() * 50.0);
           } else {
-            // FORMATION 3 : "FLUX LIBRE" (Large) -> Slalom facile
             yOffset = i * (250.0 + random.nextDouble() * 150.0);
           }
 
@@ -158,8 +158,16 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   }
 
   void _gameOver() {
+    if (isGameOver) return;
     isGameOver = true;
     chronoTimer?.cancel();
+
+    // Notifier le mode solo
+    if (widget.onSoloGameFinished != null && !_hasNotifiedSolo) {
+      _hasNotifiedSolo = true;
+      widget.onSoloGameFinished!(score, maxPossibleScore);
+    }
+
     _showGameOverDialog();
   }
 
@@ -173,6 +181,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   }
 
   void _showGameOverDialog() {
+    final bool isSoloMode = widget.onSoloGameFinished != null;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -193,21 +203,33 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
           Center(
             child: Column(
               children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _startGame();
-                  },
-                  child: const Text('REPRENDRE LA ROUTE', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('QUITTER', style: TextStyle(color: Colors.white54)),
-                ),
+                if (isSoloMode) ...[
+                  // Mode Solo : bouton neutre
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: const Text('TERMINÉ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ] else ...[
+                  // Mode Entraînement : Rejouer + Quitter
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _startGame();
+                    },
+                    child: const Text('REPRENDRE LA ROUTE', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                    },
+                    child: const Text('QUITTER', style: TextStyle(color: Colors.white54)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -328,8 +350,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
             borderRadius: BorderRadius.circular(10),
           ),
           child: isTruck
-            ? _buildTruckDetails()
-            : (isF1 ? _buildF1Details() : _buildCarDetails(Colors.white)),
+              ? _buildTruckDetails()
+              : (isF1 ? _buildF1Details() : _buildCarDetails(Colors.white)),
         ),
       ),
     );

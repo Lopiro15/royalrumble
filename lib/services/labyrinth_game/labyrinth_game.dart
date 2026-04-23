@@ -11,6 +11,14 @@ class LabyrinthGame extends FlameGame with HasCollisionDetection {
   final ValueNotifier<int> seconds = ValueNotifier(0);
   late Timer _timer;
 
+  final Function(int score, int maxScore)? onSoloGameFinished;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Labyrinth
+  static const int maxPossibleScore = 1000;
+
+  LabyrinthGame({this.onSoloGameFinished});
+
   @override
   Future<void> onLoad() async {
     add(RectangleComponent(
@@ -19,7 +27,7 @@ class LabyrinthGame extends FlameGame with HasCollisionDetection {
     ));
 
     _generateComplexLabyrinth();
-    
+
     // Position de départ (centrée dans la première cellule)
     ball = Ball(position: Vector2(17.5, 17.5));
     add(ball);
@@ -50,10 +58,10 @@ class LabyrinthGame extends FlameGame with HasCollisionDetection {
     const double cellSize = 35.0;
     final int cols = (size.x / cellSize).floor();
     final int rows = (size.y / cellSize).floor();
-    
+
     List<List<bool>> visited = List.generate(rows, (_) => List.filled(cols, false));
     List<Map<String, int>> stack = [];
-    
+
     // Initialisation : tous les murs sont présents
     List<List<bool>> hWalls = List.generate(rows + 1, (_) => List.filled(cols, true));
     List<List<bool>> vWalls = List.generate(rows, (_) => List.filled(cols + 1, true));
@@ -125,15 +133,29 @@ class LabyrinthGame extends FlameGame with HasCollisionDetection {
     add(ExitPortal(position: Vector2((cols - 0.5) * cellSize, (rows - 0.5) * cellSize)));
   }
 
+  int _calculateScore() {
+    // Score basé sur le temps : moins de temps = meilleur score
+    int timePenalty = (seconds.value * 3).clamp(0, 900);
+    return (maxPossibleScore - timePenalty).clamp(100, maxPossibleScore);
+  }
+
   void victory() {
     if (isWon) return;
     isWon = true;
     settingsManager.playWin();
+
+    // Notifier le mode solo
+    if (onSoloGameFinished != null && !_hasNotifiedSolo) {
+      _hasNotifiedSolo = true;
+      onSoloGameFinished!(_calculateScore(), maxPossibleScore);
+    }
+
     overlays.add('Victory');
   }
 
   void restart() {
     isWon = false;
+    _hasNotifiedSolo = false;
     seconds.value = 0;
     ball.position = Vector2(17.5, 17.5);
     overlays.remove('Victory');

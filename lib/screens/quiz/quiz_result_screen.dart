@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
-import '../../services/score_manager.dart'; // Sauvegarde du meilleur score
+import '../../services/score_manager.dart';
 
 // ---------------------------------------------------------------------------
 // QuizResultScreen — Écran de fin de partie quiz
-//
-// Affiche le score sur 10 questions, un message selon la perf,
-// et joue victory.mp3 (>= 50%) ou losing.mp3 (< 50%)
-// Boutons : Rejouer (retour à GameMenuScreen) ou Menu principal
 // ---------------------------------------------------------------------------
 class QuizResultScreen extends StatefulWidget {
-  final int score;        // Score obtenu
-  final int maxScore;     // Score maximum (10 × 100 = 1000)
-  final String quizName;  // Nom du quiz
-  final String gameMode;  // Mode de jeu (solo/duo/entrainement)
+  final int score;
+  final int maxScore;
+  final String quizName;
+  final String gameMode;
+  final Function(int score, int maxScore)? onSoloGameFinished;
 
   const QuizResultScreen({
     super.key,
@@ -22,6 +19,7 @@ class QuizResultScreen extends StatefulWidget {
     required this.maxScore,
     required this.quizName,
     required this.gameMode,
+    this.onSoloGameFinished,
   });
 
   @override
@@ -29,27 +27,25 @@ class QuizResultScreen extends StatefulWidget {
 }
 
 class _QuizResultScreenState extends State<QuizResultScreen> {
+  bool _hasNotifiedSolo = false;
 
   @override
   void initState() {
     super.initState();
     _playResultMusic();
-    _saveScore(); // Sauvegarde automatique du score à la fin de chaque partie
+    _saveScore();
   }
 
-  /// Sauvegarde le score dans le classement persistant via ScoreManager.
-  /// Utilise le nom du joueur stocké dans settingsManager.
   Future<void> _saveScore() async {
     await scoreManager.saveScore(
       score:      widget.score,
       maxScore:   widget.maxScore,
       gameMode:   widget.gameMode,
       playerName: settingsManager.playerName,
-      gameName:   widget.quizName, // "QUIZ" — sera "MEMORY" etc. pour les futurs jeux
+      gameName:   widget.quizName,
     );
   }
 
-  // Joue le son de victoire ou défaite selon le score
   void _playResultMusic() {
     final ratio = widget.maxScore > 0 ? widget.score / widget.maxScore : 0.0;
     if (ratio >= 0.5) {
@@ -59,7 +55,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
     }
   }
 
-  // Message et emoji selon la performance
   String get _resultTitle {
     final ratio = widget.score / widget.maxScore;
     if (ratio == 1.0)  return '🏆 PARFAIT !';
@@ -69,7 +64,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
     return '😬 ENCORE ESSAYER...';
   }
 
-  // Couleur accent selon la performance
   Color get _resultColor {
     final ratio = widget.score / widget.maxScore;
     if (ratio >= 0.6) return const Color(0xFFD4AF37);
@@ -77,10 +71,32 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
     return Colors.redAccent;
   }
 
+  void _handleContinue() {
+    settingsManager.playClick();
+    if (widget.gameMode == 'solo') {
+      // En mode solo, on retourne simplement à l'écran précédent
+      // L'overlay SoloGameOverlay est déjà affiché par le runner
+      Navigator.pop(context);
+    }
+  }
+
+  void _handleReplay() {
+    settingsManager.playClick();
+    settingsManager.startMusic();
+    Navigator.pop(context);
+  }
+
+  void _handleMenu() {
+    settingsManager.playClick();
+    settingsManager.startMusic();
+    Navigator.popUntil(context, (route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color primaryBlue = Color(0xFF001A33);
     final double ratio = widget.maxScore > 0 ? widget.score / widget.maxScore : 0;
+    final bool isSoloMode = widget.gameMode == 'solo';
 
     return Scaffold(
       backgroundColor: primaryBlue,
@@ -98,7 +114,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
             children: [
               const Spacer(),
 
-              // Mode de jeu
               Text(
                 'MODE ${widget.gameMode.toUpperCase()}',
                 style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12, letterSpacing: 3),
@@ -106,7 +121,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
 
               const SizedBox(height: 8),
 
-              // Titre résultat
               Text(
                 _resultTitle,
                 style: TextStyle(color: _resultColor, fontSize: 34, letterSpacing: 2),
@@ -114,15 +128,14 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
                   .animate()
                   .fadeIn(delay: 300.ms)
                   .scale(
-                    begin: const Offset(0.5, 0.5),
-                    delay: 300.ms,
-                    duration: 600.ms,
-                    curve: Curves.elasticOut,
-                  ),
+                begin: const Offset(0.5, 0.5),
+                delay: 300.ms,
+                duration: 600.ms,
+                curve: Curves.elasticOut,
+              ),
 
               const SizedBox(height: 40),
 
-              // Cercle de score animé
               SizedBox(
                 width: 170, height: 170,
                 child: Stack(
@@ -147,7 +160,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
 
               const SizedBox(height: 16),
 
-              // Score détaillé
               Text(
                 '${widget.score} pts',
                 style: const TextStyle(color: Colors.white60, fontSize: 15, letterSpacing: 0.5),
@@ -155,37 +167,37 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
 
               const Spacer(),
 
-              // Boutons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   children: [
-                    // Rejouer → retour au GameMenuScreen
-                    _buildBtn(
-                      label: 'REJOUER',
-                      icon: Icons.replay_rounded,
-                      color: _resultColor,
-                      onTap: () {
-                        settingsManager.playClick();
-                        settingsManager.startMusic();
-                        Navigator.pop(context);
-                      },
-                    ).animate().fadeIn(delay: 900.ms).slideY(begin: 0.2),
+                    if (isSoloMode) ...[
+                      // Mode Solo : bouton neutre (la transition est gérée par le runner)
+                      _buildBtn(
+                        label: 'TERMINÉ',
+                        icon: Icons.check_circle_rounded,
+                        color: _resultColor,
+                        onTap: _handleContinue,
+                      ).animate().fadeIn(delay: 900.ms).slideY(begin: 0.2),
+                    ] else ...[
+                      // Mode Entraînement : Rejouer + Menu
+                      _buildBtn(
+                        label: 'REJOUER',
+                        icon: Icons.replay_rounded,
+                        color: _resultColor,
+                        onTap: _handleReplay,
+                      ).animate().fadeIn(delay: 900.ms).slideY(begin: 0.2),
 
-                    const SizedBox(height: 14),
+                      const SizedBox(height: 14),
 
-                    // Menu principal → pop tout
-                    _buildBtn(
-                      label: 'MENU',
-                      icon: Icons.home_rounded,
-                      color: Colors.white.withOpacity(0.85),
-                      textColor: const Color(0xFF001A33),
-                      onTap: () {
-                        settingsManager.playClick();
-                        settingsManager.startMusic();
-                        Navigator.popUntil(context, (route) => route.isFirst);
-                      },
-                    ).animate().fadeIn(delay: 1050.ms).slideY(begin: 0.2),
+                      _buildBtn(
+                        label: 'MENU',
+                        icon: Icons.home_rounded,
+                        color: Colors.white.withOpacity(0.85),
+                        textColor: const Color(0xFF001A33),
+                        onTap: _handleMenu,
+                      ).animate().fadeIn(delay: 1050.ms).slideY(begin: 0.2),
+                    ],
                   ],
                 ),
               ),
@@ -198,8 +210,13 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
     );
   }
 
-  // Bouton générique
-  Widget _buildBtn({required String label, required IconData icon, required Color color, Color? textColor, required VoidCallback onTap}) {
+  Widget _buildBtn({
+    required String label,
+    required IconData icon,
+    required Color color,
+    Color? textColor,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

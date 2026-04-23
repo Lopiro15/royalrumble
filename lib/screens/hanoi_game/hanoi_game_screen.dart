@@ -7,7 +7,9 @@ import '../../widgets/countdown_overlay.dart';
 import '../../widgets/menu_button.dart';
 
 class HanoiGameScreen extends StatefulWidget {
-  const HanoiGameScreen({super.key});
+  final Function(int score, int maxScore)? onSoloGameFinished;
+
+  const HanoiGameScreen({super.key, this.onSoloGameFinished});
 
   @override
   State<HanoiGameScreen> createState() => _HanoiGameScreenState();
@@ -23,6 +25,10 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   Timer? timer;
   bool isGameStarted = false;
   bool isWon = false;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Hanoi (varie selon le nombre de disques)
+  int get _maxPossibleScore => numDisks * 250;
 
   final List<Color> availableColors = [
     Colors.redAccent,
@@ -42,14 +48,12 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   }
 
   void _resetGame() {
-    //numDisks = Random().nextInt(3) + 4; // Entre 4 et 6
     pegs = [
       List.generate(numDisks, (i) => numDisks - i),
       [],
       [],
     ];
-    
-    // Générer des couleurs aléatoires pour chaque taille de disque
+
     List<Color> shuffledColors = List.from(availableColors)..shuffle();
     diskColors = List.generate(numDisks + 1, (index) => shuffledColors[index % shuffledColors.length]);
 
@@ -57,6 +61,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
     secondsElapsed = 0;
     isWon = false;
     isGameStarted = false;
+    _hasNotifiedSolo = false;
     timer?.cancel();
     setState(() {});
   }
@@ -72,7 +77,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
 
   void _moveDisk(int from, int to) {
     if (pegs[from].isEmpty) return;
-    
+
     int diskToMove = pegs[from].last;
 
     if (pegs[to].isEmpty || pegs[to].last > diskToMove) {
@@ -86,6 +91,15 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
     }
   }
 
+  int _calculateScore() {
+    // Score basé sur le nombre de disques, le temps et les coups
+    // Le nombre minimum de coups pour n disques est 2^n - 1
+    int minMoves = (1 << numDisks) - 1;
+    int moveBonus = moves <= minMoves * 2 ? 100 : (moves <= minMoves * 3 ? 50 : 0);
+    int timePenalty = (secondsElapsed ~/ 10).clamp(0, 100);
+    return (_maxPossibleScore + moveBonus - timePenalty).clamp(100, _maxPossibleScore);
+  }
+
   void _checkWin() {
     if (pegs[2].length == numDisks) {
       setState(() {
@@ -93,11 +107,22 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
         timer?.cancel();
       });
       settingsManager.playWin();
-      _showWinDialog();
+
+      final int finalScore = _calculateScore();
+
+      // Notifier le mode solo
+      if (widget.onSoloGameFinished != null && !_hasNotifiedSolo) {
+        _hasNotifiedSolo = true;
+        widget.onSoloGameFinished!(finalScore, _maxPossibleScore);
+      }
+
+      _showWinDialog(finalScore);
     }
   }
 
-  void _showWinDialog() {
+  void _showWinDialog(int finalScore) {
+    final bool isSoloMode = widget.onSoloGameFinished != null;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -110,26 +135,34 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
           children: [
             const Icon(Icons.emoji_events, color: Color(0xFFD4AF37), size: 60).animate().scale(duration: 600.ms).then().shake(),
             const SizedBox(height: 20),
+            Text('SCORE: $finalScore', style: const TextStyle(color: Colors.white, fontSize: 18)),
             Text('DISQUES : $numDisks', style: const TextStyle(color: Colors.white70)),
-            Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white, fontSize: 18)),
-            Text('COUPS : $moves', style: const TextStyle(color: Colors.white, fontSize: 18)),
+            Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white70)),
+            Text('COUPS : $moves', style: const TextStyle(color: Colors.white70)),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _resetGame();
-            },
-            child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('MENU', style: TextStyle(color: Colors.white70)),
-          ),
+          if (isSoloMode) ...[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37))),
+            ),
+          ] else ...[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetGame();
+              },
+              child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('MENU', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
         ],
       ),
     );
@@ -185,7 +218,6 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
                   ],
                 ),
                 const Spacer(),
-                // Zone de jeu avec Drag and Drop
                 SizedBox(
                   height: 350,
                   child: Row(
@@ -194,17 +226,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
                     children: List.generate(3, (index) => _buildPegTarget(index, royalGold)),
                   ),
                 ),
-                 const Spacer(),
-                // Padding(
-                //   padding: const EdgeInsets.all(30),
-                //   child: MenuButton(
-                //     label: 'RECOMMENCER',
-                //     icon: Icons.refresh_rounded,
-                //     color: Colors.white10,
-                //     fontSize: 18,
-                //     onTap: _resetGame,
-                //   ),
-                // ),
+                const Spacer(),
               ],
             ),
           ),
@@ -217,7 +239,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
               },
             ),
         ],
-      )
+      ),
     );
   }
 
@@ -227,8 +249,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
         if (isWon || data == null) return false;
         int fromPeg = data['fromPeg']!;
         int diskSize = data['diskSize']!;
-        
-        // On ne peut accepter que si c'est le disque du dessus et que la règle est respectée
+
         return pegs[pegIndex].isEmpty || pegs[pegIndex].last > diskSize;
       },
       onAccept: (data) {
@@ -241,7 +262,6 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
           child: Stack(
             alignment: Alignment.bottomCenter,
             children: [
-              // La tige
               Container(
                 width: 10,
                 height: 220,
@@ -250,7 +270,6 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
                   borderRadius: BorderRadius.circular(5),
                 ),
               ),
-              // Socle de la tige
               Container(
                 width: 80,
                 height: 5,
@@ -259,7 +278,6 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Les disques
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Column(
@@ -292,7 +310,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
 
   Widget _buildDisk(int size, Color color, [bool isFeedback = false]) {
     double width = 40.0 + (size * 12.0);
-    
+
     return Material(
       color: Colors.transparent,
       child: Container(

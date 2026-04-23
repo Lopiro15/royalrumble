@@ -10,28 +10,33 @@ import '../settings_manager.dart';
 
 class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   late AirBall ball;
-  late Paddle p1; // Bottom (Gold)
-  late Paddle p2; // Top (Blue / Bot)
-  
+  late Paddle p1;
+  late Paddle p2;
+
   final ValueNotifier<int> p1Score = ValueNotifier(0);
   final ValueNotifier<int> p2Score = ValueNotifier(0);
-  
+
   bool isVsBot = true;
   bool isGameOver = false;
   int? winner;
 
+  final Function(int score, int maxScore)? onSoloGameFinished;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Air Hockey (7 points pour gagner)
+  static const int maxPossibleScore = 7;
+
+  AirHockeyGame({this.onSoloGameFinished});
+
   @override
   Future<void> onLoad() async {
-    // Bordure du terrain (Bords du monde)
     add(ScreenHitbox());
 
-    // Background terrain
     add(RectangleComponent(
       size: size,
       paint: Paint()..color = const Color(0xFF000814),
     ));
 
-    // Décorations terrain (Rond central)
     add(CircleComponent(
       position: size / 2,
       radius: 60,
@@ -39,7 +44,6 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
       paint: Paint()..color = Colors.white10..style = PaintingStyle.stroke..strokeWidth = 2,
     ));
 
-    // Ligne médiane
     add(RectangleComponent(
       position: Vector2(0, size.y / 2 - 1),
       size: Vector2(size.x, 2),
@@ -63,15 +67,13 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   void _addGoalVisuals() {
     double goalWidth = size.x * 0.45;
     double goalX = (size.x - goalWidth) / 2;
-    
-    // Top Goal
+
     add(RectangleComponent(
       position: Vector2(goalX, 0),
       size: Vector2(goalWidth, 8),
       paint: Paint()..color = Colors.blueAccent.withOpacity(0.8),
     ));
 
-    // Bottom Goal
     add(RectangleComponent(
       position: Vector2(goalX, size.y - 8),
       size: Vector2(goalWidth, 8),
@@ -80,7 +82,6 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   }
 
   void _addScoreDisplays() {
-    // Score P2 (Haut droite)
     add(TextComponent(
       text: '0',
       position: Vector2(size.x - 20, (size.y / 2) - 50),
@@ -95,7 +96,6 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
       ),
     )..add(ScoreListener(p2Score)));
 
-    // Score P1 (Bas droite)
     add(TextComponent(
       text: '0',
       position: Vector2(size.x - 20, (size.y / 2) + 50),
@@ -121,7 +121,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   @override
   void onPanUpdate(DragUpdateInfo info) {
     if (isGameOver) return;
-    
+
     final touchPos = info.eventPosition.global;
     if (touchPos.y > size.y / 2) {
       p1.moveTo(touchPos);
@@ -171,9 +171,17 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   }
 
   void _endGame(int winnerNum) {
+    if (isGameOver) return;
     isGameOver = true;
     winner = winnerNum;
     pauseEngine();
+
+    // Notifier le mode solo
+    if (onSoloGameFinished != null && !_hasNotifiedSolo) {
+      _hasNotifiedSolo = true;
+      onSoloGameFinished!(p1Score.value, maxPossibleScore);
+    }
+
     overlays.add('GameOver');
     if (winnerNum == 1) settingsManager.playVictory(); else settingsManager.playDefeat();
   }
@@ -183,6 +191,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
     p2Score.value = 0;
     isGameOver = false;
     winner = null;
+    _hasNotifiedSolo = false;
     _resetPositions();
     overlays.remove('GameOver');
     resumeEngine();

@@ -6,12 +6,12 @@ import '../../widgets/meteor_game/game_over_overlay.dart';
 import '../../widgets/meteor_game/game_ui.dart';
 
 class MeteorGameScreen extends StatefulWidget {
-  const MeteorGameScreen({super.key});
+  final Function(int score, int maxScore)? onSoloGameFinished;
 
+  const MeteorGameScreen({super.key, this.onSoloGameFinished});
 
   @override
   State<MeteorGameScreen> createState() => _MeteorGameScreenState();
-
 }
 
 class _MeteorGameScreenState extends State<MeteorGameScreen> {
@@ -21,7 +21,7 @@ class _MeteorGameScreenState extends State<MeteorGameScreen> {
   @override
   void initState() {
     super.initState();
-    game = MeteorGame();
+    game = MeteorGame(onSoloGameFinished: widget.onSoloGameFinished);
     game.pauseEngine();
   }
 
@@ -33,7 +33,10 @@ class _MeteorGameScreenState extends State<MeteorGameScreen> {
           GameWidget(
             game: game,
             overlayBuilderMap: {
-              'GameOver': (context, MeteorGame g) => GameOverOverlay(game: g),
+              'GameOver': (context, MeteorGame g) => GameOverOverlay(
+                game: g,
+                onSoloGameFinished: widget.onSoloGameFinished,
+              ),
               'UI': (context, MeteorGame g) => GameUI(game: g),
             },
             initialActiveOverlays: const ['UI'],
@@ -50,21 +53,3 @@ class _MeteorGameScreenState extends State<MeteorGameScreen> {
     );
   }
 }
-
-
-
-//
-// @override
-// Widget build(BuildContext context) {
-//   final game = MeteorGame();
-//   return Scaffold(
-//     body: GameWidget(
-//       game: game,
-//       overlayBuilderMap: {
-//         'GameOver': (context, MeteorGame g) => GameOverOverlay(game: g),
-//         'UI': (context, MeteorGame g) => GameUI(game: g),
-//       },
-//       initialActiveOverlays: const ['UI'],
-//     ),
-//   );
-// }

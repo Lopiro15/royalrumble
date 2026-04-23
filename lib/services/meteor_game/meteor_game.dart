@@ -15,10 +15,18 @@ class MeteorGame extends FlameGame with TapCallbacks, HasCollisionDetection {
   late Ship ship;
   double spawnTimer = 0;
   final Random random = Random();
-  
+
   final ValueNotifier<int> scoreNotifier = ValueNotifier(0);
   final ValueNotifier<int> ammoNotifier = ValueNotifier(0);
   bool isGameOver = false;
+
+  final Function(int score, int maxScore)? onSoloGameFinished;
+  bool _hasNotifiedSolo = false;
+
+  // Score maximum pour Meteor Shower
+  static const int maxPossibleScore = 1000;
+
+  MeteorGame({this.onSoloGameFinished});
 
   @override
   Future<void> onLoad() async {
@@ -67,7 +75,7 @@ class MeteorGame extends FlameGame with TapCallbacks, HasCollisionDetection {
             );
             return AcceleratedParticle(
               speed: speed,
-              acceleration: speed * -0.5, 
+              acceleration: speed * -0.5,
               position: pos.clone(),
               child: CircleParticle(
                 radius: 1.0 + random.nextDouble() * radius,
@@ -83,32 +91,43 @@ class MeteorGame extends FlameGame with TapCallbacks, HasCollisionDetection {
   void gameOver() {
     if (isGameOver) return;
     isGameOver = true;
-    
+
     createExplosion(ship.position, const Color(0xFFD4AF37), count: 80, radius: 6.0);
     createExplosion(ship.position, Colors.orangeAccent, count: 40, radius: 4.0);
     createExplosion(ship.position, Colors.white, count: 20, radius: 2.0);
-    
+
     ship.removeFromParent();
-    
+
+    // Notifier le mode solo
+    _notifySoloGameFinished();
+
     async.Timer(const Duration(milliseconds: 1000), () {
       pauseEngine();
       overlays.add('GameOver');
     });
-    
+
     settingsManager.stopMusic();
+  }
+
+  void _notifySoloGameFinished() {
+    if (onSoloGameFinished != null && !_hasNotifiedSolo) {
+      _hasNotifiedSolo = true;
+      onSoloGameFinished!(scoreNotifier.value, maxPossibleScore);
+    }
   }
 
   void restart() {
     isGameOver = false;
+    _hasNotifiedSolo = false;
     scoreNotifier.value = 0;
     ammoNotifier.value = 0;
     spawnTimer = 0;
     children.whereType<Meteor>().forEach((m) => m.removeFromParent());
     children.whereType<Bullet>().forEach((b) => b.removeFromParent());
-    
+
     ship = Ship();
     add(ship);
-    
+
     overlays.remove('GameOver');
     resumeEngine();
     settingsManager.startMusic();
