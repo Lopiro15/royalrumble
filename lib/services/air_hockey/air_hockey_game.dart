@@ -83,7 +83,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
     // Score P2 (Haut droite)
     add(TextComponent(
       text: '0',
-      position: Vector2(size.x - 20, 20),
+      position: Vector2(size.x - 20, (size.y / 2) - 50),
       anchor: Anchor.topRight,
       textRenderer: TextPaint(
         style: const TextStyle(
@@ -98,7 +98,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
     // Score P1 (Bas droite)
     add(TextComponent(
       text: '0',
-      position: Vector2(size.x - 20, size.y - 20),
+      position: Vector2(size.x - 20, (size.y / 2) + 50),
       anchor: Anchor.bottomRight,
       textRenderer: TextPaint(
         style: const TextStyle(
