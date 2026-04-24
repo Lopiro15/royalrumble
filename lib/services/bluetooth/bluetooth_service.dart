@@ -59,7 +59,7 @@ class BluetoothService extends GetxService {
   }
 
   // ---------------------------------------------------------------------------
-  // HÉBERGER
+  // HÉBERGER - Accepter dans onConnectionInitiated
   // ---------------------------------------------------------------------------
   Future<void> startAdvertising({required String playerName}) async {
     try {
@@ -75,18 +75,16 @@ class BluetoothService extends GetxService {
         onConnectionInitiated: (String id, ConnectionInfo info) {
           debugPrint('📥 Demande de: $id (${info.endpointName})');
 
-          // L'hôte DOIT accepter ici pour que la connexion aboutisse
+          // L'hôte DOIT accepter pour que la connexion aboutisse
           Nearby().acceptConnection(
             id,
             onPayLoadRecieved: _onPayloadReceived,
             onPayloadTransferUpdate: _onPayloadTransferUpdate,
           );
 
-          // Marquer comme connecté
           final player = BluetoothPlayer(id: id, name: info.endpointName, endpointId: id);
           connectedPlayer.value = player;
           status.value = ConnectionStatus.connected;
-
           debugPrint('✅ Hôte connecté à: ${info.endpointName}');
         },
         onConnectionResult: (String id, Status connectionStatus) {
@@ -143,7 +141,7 @@ class BluetoothService extends GetxService {
   }
 
   // ---------------------------------------------------------------------------
-  // DÉFIER - CORRIGÉ : accepter dans onConnectionInitiated
+  // DÉFIER - Accepter dans onConnectionInitiated, envoyer défi dans onConnectionResult
   // ---------------------------------------------------------------------------
   Future<bool> connectToPlayer(BluetoothPlayer player, {required String playerName}) async {
     try {
@@ -172,14 +170,18 @@ class BluetoothService extends GetxService {
           status.value = ConnectionStatus.connected;
 
           debugPrint('✅ Client connecté à: ${info.endpointName}');
-          _connectionCompleter?.complete(true);
         },
         onConnectionResult: (String id, Status connectionStatus) {
           debugPrint('🔗 Résultat client: $id -> $connectionStatus');
-          if (connectionStatus == Status.CONNECTED && !(_connectionCompleter?.isCompleted ?? true)) {
-            _connectionCompleter?.complete(true);
-          } else if (connectionStatus != Status.CONNECTED && !(_connectionCompleter?.isCompleted ?? true)) {
-            _connectionCompleter?.complete(false);
+          if (connectionStatus == Status.CONNECTED) {
+            // Connexion confirmée, on peut compléter
+            if (!(_connectionCompleter?.isCompleted ?? true)) {
+              _connectionCompleter?.complete(true);
+            }
+          } else {
+            if (!(_connectionCompleter?.isCompleted ?? true)) {
+              _connectionCompleter?.complete(false);
+            }
           }
         },
         onDisconnected: (String id) {
@@ -192,10 +194,21 @@ class BluetoothService extends GetxService {
         },
       );
 
+      // Attendre un peu que la connexion se stabilise, puis considérer comme connecté
+      // car onConnectionResult peut ne pas être appelé sur toutes les plateformes
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (!(_connectionCompleter?.isCompleted ?? true)) {
+        // Si onConnectionResult n'a pas été appelé, on considère que c'est bon
+        // car onConnectionInitiated a déjà été appelé
+        debugPrint('⏳ onConnectionResult non appelé, connexion considérée OK');
+        _connectionCompleter?.complete(true);
+      }
+
       final result = await _connectionCompleter!.future.timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 10),
         onTimeout: () {
-          debugPrint('⏰ Timeout');
+          debugPrint('⏰ Timeout final');
           return false;
         },
       );

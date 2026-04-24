@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../screens/versus/versus_game_screen.dart';
 import '../services/bluetooth/bluetooth_service.dart';
 import '../services/bluetooth/bluetooth_game_handler.dart';
 import '../services/versus/versus_game_manager.dart';
 import '../services/settings_manager.dart';
+import '../screens/versus/versus_setup_screen.dart';
 
 class VersusStore extends GetxController {
   final BluetoothService bluetoothService = Get.put(BluetoothService());
@@ -14,11 +16,10 @@ class VersusStore extends GetxController {
   final Rx<bool> isConnected = false.obs;
   final Rx<String?> currentGame = Rx<String?>(null);
 
-  // Messages pour l'UI
   final Rx<String?> statusMessage = Rx<String?>(null);
 
-  // Callback pour afficher le défi (sera défini par le LobbyScreen)
-  void Function(String challengerName, int rounds)? onChallengeReceived;
+  // Callback pour afficher le défi
+  void Function(String challengerName)? onChallengeReceived;
 
   @override
   void onInit() {
@@ -66,14 +67,13 @@ class VersusStore extends GetxController {
     );
 
     if (connected) {
-      _showMessage('Connecté ! Défi envoyé.');
-      await Future.delayed(const Duration(milliseconds: 500));
+      _showMessage('Connecté ! En attente de la réponse...');
 
+      // Envoyer le défi SANS les rounds (l'hôte choisira après acceptation)
       bluetoothService.sendMessage({
         'type': 'challenge',
         'data': {
           'fromName': settingsManager.playerName,
-          'rounds': selectedConfig.value.totalRounds,
         },
       });
     } else {
@@ -82,11 +82,12 @@ class VersusStore extends GetxController {
   }
 
   void acceptChallenge() {
+    // L'invité accepte, on envoie la confirmation
     bluetoothService.sendMessage({
       'type': 'challengeAccepted',
       'data': {},
     });
-    _startGame(isHost: false);
+    _showMessage('Défi accepté ! En attente de la configuration...');
   }
 
   void rejectChallenge() {
@@ -98,15 +99,44 @@ class VersusStore extends GetxController {
     _showMessage('Défi refusé');
   }
 
+  /// Appelé par l'hôte après avoir choisi le nombre de manches
+  void hostConfirmSetup(VersusGameConfig config) {
+    selectedConfig.value = config;
+
+    // Envoyer la config à l'invité
+    bluetoothService.sendMessage({
+      'type': 'gameSetup',
+      'data': {
+        'rounds': config.totalRounds,
+        'winsNeeded': config.winsNeeded,
+      },
+    });
+
+    // Démarrer le jeu côté hôte
+    _startGame(isHost: true);
+  }
+
   void _startGame({bool isHost = true}) {
+    gameManager.value = VersusGameManager(
+      bluetoothService: bluetoothService,
+      config: selectedConfig.value,
+      isHost: isHost,
+    );
+
     bluetoothService.sendMessage({
       'type': 'gameStart',
       'data': {
-        'config': {'rounds': selectedConfig.value.totalRounds},
+        'config': {
+          'rounds': selectedConfig.value.totalRounds,
+          'winsNeeded': selectedConfig.value.winsNeeded,
+        },
       },
     });
+
     _showMessage('Début de la partie !');
-    // Navigation vers le jeu (à implémenter)
+
+    // Naviguer vers le jeu
+    Get.off(() => const VersusGameScreen());
   }
 
   void _handleMessage(Map<String, dynamic> message) {
@@ -117,22 +147,22 @@ class VersusStore extends GetxController {
 
     switch (typeStr) {
       case 'challenge':
-        debugPrint('🎯 DÉFI REÇU ! Appel du callback...');
-        final rounds = message['data']?['rounds'] as int? ?? 3;
+        debugPrint('🎯 DÉFI REÇU !');
         final fromName = message['data']?['fromName'] as String? ?? 'Joueur';
-        selectedConfig.value = VersusGameConfig.fromRounds(rounds);
 
-        // Utiliser le callback au lieu de Get.dialog
+        // Afficher la popup de défi
         if (onChallengeReceived != null) {
-          onChallengeReceived!(fromName, rounds);
-        } else {
-          debugPrint('❌ onChallengeReceived est null !');
+          onChallengeReceived!(fromName);
         }
         break;
 
       case 'challengeAccepted':
-        _showMessage('Défi accepté !');
-        _startGame(isHost: true);
+        debugPrint('✅ Défi accepté par l\'invité !');
+        _showMessage('Défi accepté ! Configurez la partie.');
+
+        // L'hôte doit maintenant choisir la configuration
+        // Afficher l'écran de configuration
+        Get.to(() => VersusSetupScreen(isHost: true));
         break;
 
       case 'challengeRejected':
@@ -140,7 +170,15 @@ class VersusStore extends GetxController {
         bluetoothService.disconnect();
         break;
 
+      case 'gameSetup':
+      // L'invité reçoit la configuration
+        final rounds = message['data']?['rounds'] as int? ?? 3;
+        selectedConfig.value = VersusGameConfig.fromRounds(rounds);
+        _showMessage('Configuration reçue: BO$rounds');
+        break;
+
       case 'gameStart':
+        debugPrint('🎮 Début de partie !');
         if (gameManager.value == null) {
           gameManager.value = VersusGameManager(
             bluetoothService: bluetoothService,
@@ -150,7 +188,14 @@ class VersusStore extends GetxController {
             isHost: false,
           );
         }
-        _startGame(isHost: false);
+        _showMessage('La partie commence !');
+
+        // Naviguer vers le jeu côté invité
+        Get.off(() => const VersusGameScreen());
+        break;
+
+      case 'gameResult':
+        debugPrint('📊 Résultat reçu: ${message['data']}');
         break;
     }
   }

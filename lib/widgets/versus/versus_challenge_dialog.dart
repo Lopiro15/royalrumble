@@ -4,14 +4,12 @@ import '../../services/settings_manager.dart';
 
 class VersusChallengeDialog extends StatelessWidget {
   final String challengerName;
-  final int rounds;
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
   const VersusChallengeDialog({
     super.key,
     required this.challengerName,
-    required this.rounds,
     required this.onAccept,
     required this.onReject,
   });
@@ -56,53 +54,68 @@ class VersusChallengeDialog extends StatelessWidget {
             const SizedBox(height: 8),
 
             Text(
-              'vous défie en BO$rounds',
+              'vous défie en duel !',
               style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
             ),
 
             const SizedBox(height: 30),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    settingsManager.playClick();
-                    onReject();
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
-                    ),
-                    child: const Text(
-                      'REFUSER',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 16),
-                    ),
+            // Remplacer le Row par :
+            const SizedBox(height: 24),
+
+// Boutons empilés au lieu d'une Row
+            GestureDetector(
+              onTap: () {
+                settingsManager.playClick();
+                onAccept();
+                Navigator.pop(context);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: royalGold,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'ACCEPTER',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF001A33),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    settingsManager.playClick();
-                    onAccept();
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: royalGold,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'ACCEPTER',
-                      style: TextStyle(color: Color(0xFF001A33), fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            GestureDetector(
+              onTap: () {
+                settingsManager.playClick();
+                onReject();
+                Navigator.pop(context);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                ),
+                child: const Text(
+                  'REFUSER',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 16,
+                    letterSpacing: 2,
                   ),
                 ),
-              ],
+              ),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
+import 'package:royalrumble/screens/versus/versus_setup_screen.dart';
 import '../../services/bluetooth/bluetooth_service.dart';
 import '../../services/bluetooth/bluetooth_permission_service.dart';
 import '../../stores/versus_store.dart';
@@ -26,7 +27,7 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final store = Get.find<VersusStore>();
 
-      store.onChallengeReceived = (challengerName, rounds) {
+      store.onChallengeReceived = (challengerName) {
         debugPrint('🎯 Affichage de la popup de défi pour: $challengerName');
         if (mounted) {
           showDialog(
@@ -34,10 +35,11 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
             barrierDismissible: false,
             builder: (ctx) => VersusChallengeDialog(
               challengerName: challengerName,
-              rounds: rounds,
               onAccept: () {
                 Navigator.pop(ctx);
                 store.acceptChallenge();
+                // L'invité voit l'écran d'attente
+                Get.to(() => const VersusSetupScreen(isHost: false));
               },
               onReject: () {
                 Navigator.pop(ctx);
@@ -110,7 +112,7 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
                   const SizedBox(height: 20),
 
                   // Configuration des manches
-                  _buildConfigSection(store, royalGold),
+                  // _buildConfigSection(store, royalGold),
 
                   const SizedBox(height: 20),
 
