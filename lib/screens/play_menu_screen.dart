@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:royalrumble/screens/solo_game_runner_screen.dart';
+import 'package:get/get.dart';
+import 'package:royalrumble/screens/versus/test_nearby_screen.dart';
+import 'solo_game_runner_screen.dart';
 import 'game_selection_screen.dart';
+import 'versus/versus_lobby_screen.dart';
 import '../services/settings_manager.dart';
+import '../stores/versus_store.dart';
 import '../widgets/menu_button.dart';
 
 class PlayMenuScreen extends StatelessWidget {
@@ -43,11 +47,11 @@ class PlayMenuScreen extends StatelessWidget {
                               .moveY(begin: -5, end: 5, duration: 2000.ms, curve: Curves.easeInOut),
                         ),
                         const SizedBox(height: 30),
-                        
+
                         _buildMenuSection(context, royalGold, primaryBlue),
-                        
+
                         const Spacer(),
-                        
+
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
                           child: MenuButton(
@@ -96,7 +100,21 @@ class PlayMenuScreen extends StatelessWidget {
             label: 'VERSUS',
             icon: Icons.people_rounded,
             color: gold,
-            onTap: () => settingsManager.playClick(),
+            onTap: () {
+              settingsManager.playClick();
+              // Enregistrer le VersusStore avant la navigation
+              if (!Get.isRegistered<VersusStore>()) {
+                Get.put(VersusStore());
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const VersusLobbyScreen()),
+              );
+              // Navigator.push(
+              //   context,
+              //   MaterialPageRoute(builder: (context) => const TestNearbyScreen()),
+              // );
+            },
           ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.2),
           const SizedBox(height: 15),
           MenuButton(
