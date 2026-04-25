@@ -7,8 +7,9 @@ import '../../widgets/meteor_game/game_ui.dart';
 
 class MeteorGameScreen extends StatefulWidget {
   final Function(int score, int maxScore)? onSoloGameFinished;
+  final Function(int score, bool isDead)? onVersusGameFinished;
 
-  const MeteorGameScreen({super.key, this.onSoloGameFinished});
+  const MeteorGameScreen({super.key, this.onSoloGameFinished, this.onVersusGameFinished});
 
   @override
   State<MeteorGameScreen> createState() => _MeteorGameScreenState();
@@ -17,11 +18,21 @@ class MeteorGameScreen extends StatefulWidget {
 class _MeteorGameScreenState extends State<MeteorGameScreen> {
   late MeteorGame game;
   bool _showCountdown = true;
+  bool _hasNotifiedVersus = false;
 
   @override
   void initState() {
     super.initState();
     game = MeteorGame(onSoloGameFinished: widget.onSoloGameFinished);
+
+    // Configurer le callback versus
+    game.onVersusFinished = (score, isDead) {
+      if (!_hasNotifiedVersus) {
+        _hasNotifiedVersus = true;
+        widget.onVersusGameFinished?.call(score, isDead);
+      }
+    };
+
     game.pauseEngine();
   }
 
@@ -36,6 +47,7 @@ class _MeteorGameScreenState extends State<MeteorGameScreen> {
               'GameOver': (context, MeteorGame g) => GameOverOverlay(
                 game: g,
                 onSoloGameFinished: widget.onSoloGameFinished,
+                isVersusMode: widget.onVersusGameFinished != null,
               ),
               'UI': (context, MeteorGame g) => GameUI(game: g),
             },

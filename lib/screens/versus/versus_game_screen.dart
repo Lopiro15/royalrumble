@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:royalrumble/screens/play_menu_screen.dart';
+import 'package:royalrumble/screens/versus/versus_lobby_screen.dart';
 import '../../stores/versus_store.dart';
 import '../../services/settings_manager.dart';
-import '../car_game/car_game_screen.dart';
+import '../meteor_game/meteor_game_screen.dart';
 
 class VersusGameScreen extends StatefulWidget {
   const VersusGameScreen({super.key});
@@ -14,69 +16,58 @@ class VersusGameScreen extends StatefulWidget {
 class _VersusGameScreenState extends State<VersusGameScreen> {
   final VersusStore store = Get.find<VersusStore>();
 
-  // État du jeu
   int? _myScore;
   bool _iAmDead = false;
   int? _opponentScore;
   bool _opponentIsDead = false;
   bool _resultShown = false;
-
-  // État du replay
   bool _waitingReplay = false;
   bool _opponentWantsReplay = false;
-  bool _replayTriggered = false;
 
-  // Clé pour reconstruire le widget de jeu
-  Key _gameKey = UniqueKey();
+  String get _gameType => 'meteorScore';
 
   @override
   void initState() {
     super.initState();
+    _setupListener();
+  }
 
-    // Le Store garde le contrôle des messages généraux
-    // Mais on écoute les messages spécifiques au jeu
+  void _setupListener() {
     store.bluetoothService.onMessageReceived = (message) {
       final type = message['type'] as String?;
       final data = message['data'] as Map<String, dynamic>?;
 
-      if (type == 'carScore') {
+      if (type == _gameType && mounted) {
         setState(() {
           _opponentScore = data?['score'] as int?;
           _opponentIsDead = data?['isDead'] as bool? ?? false;
         });
-
-        if (_iAmDead && _opponentIsDead && !_resultShown) {
-          _showResult();
-        }
+        if (_iAmDead && _opponentIsDead && !_resultShown) _showResult();
       }
 
-      if (type == 'replayRequest') {
-        debugPrint('🔄 Adversaire veut rejouer');
+      if (type == 'replayRequest' && mounted) {
         setState(() => _opponentWantsReplay = true);
-        _checkBothReadyToReplay();
+        if (_waitingReplay && _opponentWantsReplay) _bothReady();
       }
 
-      if (type == 'replayAccepted') {
-        debugPrint('🔄 Replay accepté, relancement !');
-        _doRestartGame();
+      if (type == 'replayAccepted' && mounted) {
+        _restartGame();
       }
     };
   }
 
   void _onMyGameFinished(int score, bool isDead) {
-    if (_replayTriggered) return; // Ignorer si replay en cours
-
     _myScore = score;
     _iAmDead = isDead;
 
     store.bluetoothService.sendMessage({
-      'type': 'carScore',
+      'type': _gameType,
       'data': {'score': score, 'isDead': isDead},
     });
 
     if (_opponentIsDead && !_resultShown) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (!_resultShown) _showResult();
+        if (!_resultShown && mounted) _showResult();
       });
     }
   }
@@ -105,89 +96,25 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
           backgroundColor: const Color(0xFF001A33),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent),
-              width: 2,
-            ),
+            side: BorderSide(color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), width: 2),
           ),
-          title: Text(
-            isDraw ? '🤝 MATCH NUL !' : (won ? '🏆 VICTOIRE !' : '😓 DÉFAITE...'),
+          title: Text(isDraw ? '🤝 MATCH NUL !' : (won ? '🏆 VICTOIRE !' : '😓 DÉFAITE...'),
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent),
-              fontSize: 24,
-            ),
+            style: TextStyle(color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), fontSize: 24),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                isDraw ? Icons.handshake_rounded : (won ? Icons.emoji_events : Icons.sentiment_dissatisfied),
-                color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent),
-                size: 60,
-              ),
+              Icon(isDraw ? Icons.handshake_rounded : (won ? Icons.emoji_events : Icons.sentiment_dissatisfied),
+                  color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), size: 60),
               const SizedBox(height: 20),
               Text('VOUS: $myScore pts', style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 20, fontWeight: FontWeight.bold)),
               Text('ADVERSAIRE: $oppScore pts', style: const TextStyle(color: Colors.blueAccent, fontSize: 20, fontWeight: FontWeight.bold)),
               if (isDraw) ...[
-                const SizedBox(height: 12),
-                const Text('⚡ Égalité ! Les deux joueurs doivent cliquer sur REJOUER.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.orangeAccent, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                // Statut de l'adversaire
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _opponentWantsReplay ? Icons.check_circle : Icons.hourglass_empty,
-                        color: _opponentWantsReplay ? Colors.greenAccent : Colors.white38,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _opponentWantsReplay ? 'Adversaire prêt !' : 'En attente de l\'adversaire...',
-                        style: TextStyle(
-                          color: _opponentWantsReplay ? Colors.greenAccent : Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 16),
+                _chip('Vous', _waitingReplay),
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _waitingReplay ? Icons.check_circle : Icons.hourglass_empty,
-                        color: _waitingReplay ? Colors.greenAccent : Colors.white38,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _waitingReplay ? 'Vous êtes prêt !' : 'Cliquez sur REJOUER',
-                        style: TextStyle(
-                          color: _waitingReplay ? Colors.greenAccent : Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _chip('Adversaire', _opponentWantsReplay),
               ],
             ],
           ),
@@ -200,13 +127,12 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _waitingReplay ? Colors.grey : Colors.orangeAccent,
                     foregroundColor: const Color(0xFF001A33),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
                   onPressed: _waitingReplay ? null : () {
-                    debugPrint('🔄 Je veux rejouer !');
-                    setDialogState(() => _waitingReplay = true);
+                    setState(() => _waitingReplay = true);
+                    setDialogState(() {});
                     store.bluetoothService.sendMessage({'type': 'replayRequest', 'data': {}});
-                    _checkBothReadyToReplay();
+                    if (_opponentWantsReplay) _bothReady();
                   },
                 ),
               ),
@@ -215,14 +141,11 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.arrow_forward_rounded),
                   label: const Text('CONTINUER'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4AF37),
-                    foregroundColor: const Color(0xFF001A33),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
                   onPressed: () {
                     Navigator.pop(ctx);
                     store.disconnectAndReset();
-                    Get.until((route) => route.isFirst);
+                    Get.offAll(() => const PlayMenuScreen());
                   },
                 ),
               ),
@@ -232,35 +155,29 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
     );
   }
 
-  void _checkBothReadyToReplay() {
-    debugPrint('🔄 Check replay: moi=$_waitingReplay, adv=$_opponentWantsReplay');
-    if (_waitingReplay && _opponentWantsReplay && !_replayTriggered) {
-      _replayTriggered = true;
-      debugPrint('🔄 Les deux sont prêts, envoi replayAccepted');
-      store.bluetoothService.sendMessage({'type': 'replayAccepted', 'data': {}});
-      _doRestartGame();
-    }
+  Widget _chip(String label, bool ready) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(ready ? Icons.check_circle : Icons.hourglass_empty, color: ready ? Colors.greenAccent : Colors.white38, size: 16),
+        const SizedBox(width: 6),
+        Text('$label : ${ready ? "Prêt !" : "En attente..."}', style: TextStyle(color: ready ? Colors.greenAccent : Colors.white54, fontSize: 12)),
+      ]),
+    );
   }
 
-  void _doRestartGame() {
-    debugPrint('🔄 Redémarrage du jeu !');
-    // Fermer le dialog s'il est ouvert
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
+  void _bothReady() {
+    store.bluetoothService.sendMessage({'type': 'replayAccepted', 'data': {}});
+    _restartGame();
+  }
 
-    // Réinitialiser l'état
-    setState(() {
-      _myScore = null;
-      _iAmDead = false;
-      _opponentScore = null;
-      _opponentIsDead = false;
-      _resultShown = false;
-      _waitingReplay = false;
-      _opponentWantsReplay = false;
-      _replayTriggered = false;
-      _gameKey = UniqueKey(); // Nouvelle clé pour reconstruire le widget
-    });
+  void _restartGame() {
+    // Fermer la popup
+    if (Navigator.canPop(context)) Navigator.pop(context);
+
+    // Remplacer l'écran entier par un nouveau (propre)
+    Get.off(() => const VersusGameScreen());
   }
 
   @override
@@ -274,7 +191,6 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
             builder: (ctx) => AlertDialog(
               backgroundColor: const Color(0xFF001A33),
               title: const Text('Quitter ?', style: TextStyle(color: Colors.white)),
-              content: const Text('Vous perdrez la partie.', style: TextStyle(color: Colors.white70)),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ANNULER')),
                 TextButton(
@@ -282,7 +198,7 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                     Navigator.pop(ctx);
                     store.bluetoothService.sendMessage({'type': 'disconnect', 'data': {}});
                     store.disconnectAndReset();
-                    Get.until((route) => route.isFirst);
+                    Get.offAll(() => const VersusLobbyScreen());
                   },
                   child: const Text('QUITTER', style: TextStyle(color: Colors.redAccent)),
                 ),
@@ -294,11 +210,7 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
       child: Scaffold(
         body: Stack(
           children: [
-            // Clé unique pour forcer la reconstruction du jeu
-            CarGameScreen(
-              key: _gameKey,
-              onVersusGameFinished: _onMyGameFinished,
-            ),
+            MeteorGameScreen(onVersusGameFinished: _onMyGameFinished),
             SafeArea(
               child: Align(
                 alignment: Alignment.topCenter,
@@ -307,7 +219,7 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
                   child: Text(
-                    _opponentIsDead ? 'Adv: ${_opponentScore ?? "?"} pts ☠️' : 'Adv: en vie 🏎️',
+                    _opponentIsDead ? 'Adv: ${_opponentScore ?? "?"} pts ☠️' : 'Adv: en vie 🛸',
                     style: TextStyle(color: _opponentIsDead ? Colors.redAccent : Colors.greenAccent, fontSize: 11),
                   ),
                 ),

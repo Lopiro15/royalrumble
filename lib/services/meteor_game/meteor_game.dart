@@ -23,7 +23,9 @@ class MeteorGame extends FlameGame with TapCallbacks, HasCollisionDetection {
   final Function(int score, int maxScore)? onSoloGameFinished;
   bool _hasNotifiedSolo = false;
 
-  // Score maximum pour Meteor Shower
+  // AJOUT : callback pour le mode Versus
+  void Function(int score, bool isDead)? onVersusFinished;
+
   static const int maxPossibleScore = 1000;
 
   MeteorGame({this.onSoloGameFinished});
@@ -98,8 +100,10 @@ class MeteorGame extends FlameGame with TapCallbacks, HasCollisionDetection {
 
     ship.removeFromParent();
 
-    // Notifier le mode solo
     _notifySoloGameFinished();
+
+    // AJOUT : notifier le mode Versus
+    onVersusFinished?.call(scoreNotifier.value, true);
 
     async.Timer(const Duration(milliseconds: 1000), () {
       pauseEngine();
