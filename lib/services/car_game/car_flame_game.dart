@@ -20,6 +20,8 @@ class CarFlameGame extends FlameGame with PanDetector, TapCallbacks, HasCollisio
   final Random random = Random();
   double lastSpawnY = 0;
 
+  void Function(int score, bool isDead)? onVersusFinished;
+
   @override
   Future<void> onLoad() async {
     player = PlayerCar();
@@ -44,7 +46,7 @@ class CarFlameGame extends FlameGame with PanDetector, TapCallbacks, HasCollisio
     if (children.whereType<ObstacleCar>().isEmpty || (lastSpawnY > 500 && random.nextDouble() < 0.06)) {
       _spawnWave();
     }
-    
+
     final obstacles = children.whereType<ObstacleCar>();
     if (obstacles.isNotEmpty) {
       lastSpawnY = obstacles.map((e) => e.position.y).reduce(max);
@@ -113,10 +115,14 @@ class CarFlameGame extends FlameGame with PanDetector, TapCallbacks, HasCollisio
   }
 
   void gameOver() {
+    if (isGameOver) return; // Éviter les appels multiples
     isGameOver = true;
     pauseEngine();
     overlays.add('GameOver');
     settingsManager.stopMusic();
+
+    // AJOUT : notifier le mode Versus
+    onVersusFinished?.call(score, true);
   }
 
   void restart() {

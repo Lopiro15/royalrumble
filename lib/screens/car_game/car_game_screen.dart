@@ -18,14 +18,20 @@ class Obstacle {
 
 class CarGameScreen extends StatefulWidget {
   final Function(int score, int maxScore)? onSoloGameFinished;
+  final Function(int score, bool isDead)? onVersusGameFinished; // AJOUT
 
-  const CarGameScreen({super.key, this.onSoloGameFinished});
+  const CarGameScreen({
+    super.key,
+    this.onSoloGameFinished,
+    this.onVersusGameFinished,
+  });
 
   @override
   State<CarGameScreen> createState() => _CarGameScreenState();
 }
 
-class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateMixin {
+class _CarGameScreenState extends State<CarGameScreen>
+    with TickerProviderStateMixin {
   late Timer gameTimer;
   int score = 0;
   int secondsElapsed = 0;
@@ -107,7 +113,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
         return false;
       });
 
-      if (obstacles.isEmpty || (obstacles.last.y > 500 && random.nextDouble() < 0.06)) {
+      if (obstacles.isEmpty ||
+          (obstacles.last.y > 500 && random.nextDouble() < 0.06)) {
         double spawnChance = random.nextDouble();
         int count = spawnChance < 0.4 ? 1 : (spawnChance < 0.8 ? 2 : 3);
 
@@ -119,7 +126,9 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
           int lane = availableLanes[i];
 
           double randType = random.nextDouble();
-          ObstacleType type = randType > 0.92 ? ObstacleType.f1 : (randType > 0.7 ? ObstacleType.truck : ObstacleType.sedan);
+          ObstacleType type = randType > 0.92
+              ? ObstacleType.f1
+              : (randType > 0.7 ? ObstacleType.truck : ObstacleType.sedan);
 
           double yOffset;
           if (formationRand < 0.35) {
@@ -130,11 +139,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
             yOffset = i * (250.0 + random.nextDouble() * 150.0);
           }
 
-          obstacles.add(Obstacle(
-            y: baseY - yOffset,
-            lane: lane,
-            type: type,
-          ));
+          obstacles.add(Obstacle(y: baseY - yOffset, lane: lane, type: type));
         }
       }
 
@@ -144,7 +149,9 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
         double obsTop = obs.y;
         double obsBottom = obs.y + (obs.type == ObstacleType.truck ? 200 : 80);
 
-        if (obs.lane == playerLane && obsBottom > carTop && obsTop < carBottom) {
+        if (obs.lane == playerLane &&
+            obsBottom > carTop &&
+            obsTop < carBottom) {
           if (isJumping) {
             if (obs.type == ObstacleType.truck) {
               _gameOver();
@@ -168,6 +175,9 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       widget.onSoloGameFinished!(score, maxPossibleScore);
     }
 
+    // Notifier le mode versus
+    widget.onVersusGameFinished?.call(score, true);
+
     _showGameOverDialog();
   }
 
@@ -181,7 +191,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   }
 
   void _showGameOverDialog() {
-    final bool isSoloMode = widget.onSoloGameFinished != null;
+    final bool isVersusMode = widget.onVersusGameFinished != null;
+    final bool isSoloMode = widget.onSoloGameFinished != null && !isVersusMode;
 
     showDialog(
       context: context,
@@ -197,23 +208,27 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
             const SizedBox(height: 20),
             Text('SCORE: $score', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
             Text('TEMPS: ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            if (isVersusMode) ...[
+              const SizedBox(height: 8),
+              const Text('En attente de l\'adversaire...', style: TextStyle(color: Colors.orangeAccent, fontSize: 14)),
+              const SizedBox(height: 8),
+              const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Color(0xFFD4AF37), strokeWidth: 2)),
+            ],
           ],
         ),
         actions: [
-          Center(
-            child: Column(
-              children: [
-                if (isSoloMode) ...[
-                  // Mode Solo : bouton neutre
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text('TERMINÉ', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ] else ...[
-                  // Mode Entraînement : Rejouer + Quitter
+          if (!isVersusMode && isSoloMode)
+            Center(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('TERMINÉ', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          if (!isVersusMode && !isSoloMode)
+            Center(
+              child: Column(
+                children: [
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
                     onPressed: () {
@@ -230,9 +245,8 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
                     child: const Text('QUITTER', style: TextStyle(color: Colors.white54)),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -290,10 +304,7 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
   Widget _buildRoad() {
     return CustomPaint(
       size: Size.infinite,
-      painter: RoadPainter(
-        offset: roadOffset,
-        lanes: 4,
-      ),
+      painter: RoadPainter(offset: roadOffset, lanes: 4),
     );
   }
 
@@ -308,8 +319,14 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       left: xPos,
       child: ScaleTransition(
         scale: TweenSequence([
-          TweenSequenceItem(tween: Tween<double>(begin: 1.0, end: 1.4), weight: 50),
-          TweenSequenceItem(tween: Tween<double>(begin: 1.4, end: 1.0), weight: 50),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1.0, end: 1.4),
+            weight: 50,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1.4, end: 1.0),
+            weight: 50,
+          ),
         ]).animate(_jumpController),
         child: Container(
           width: 50,
@@ -346,7 +363,9 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
           width: 50,
           height: isTruck ? 200 : 80,
           decoration: BoxDecoration(
-            color: isTruck ? Colors.transparent : (isF1 ? Colors.greenAccent : Colors.white),
+            color: isTruck
+                ? Colors.transparent
+                : (isF1 ? Colors.greenAccent : Colors.white),
             borderRadius: BorderRadius.circular(10),
           ),
           child: isTruck
@@ -362,14 +381,60 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+        ],
       ),
       child: Stack(
         children: [
-          Positioned(top: 10, left: 8, right: 8, child: Container(height: 12, decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)))),
-          Positioned(bottom: 15, left: 10, right: 10, child: Container(height: 20, decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)))),
-          Positioned(top: 5, left: 6, child: Container(width: 8, height: 4, decoration: BoxDecoration(color: isPlayer ? Colors.yellowAccent : Colors.redAccent, borderRadius: BorderRadius.circular(2)))),
-          Positioned(top: 5, right: 6, child: Container(width: 8, height: 4, decoration: BoxDecoration(color: isPlayer ? Colors.yellowAccent : Colors.redAccent, borderRadius: BorderRadius.circular(2)))),
+          Positioned(
+            top: 10,
+            left: 8,
+            right: 8,
+            child: Container(
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 15,
+            left: 10,
+            right: 10,
+            child: Container(
+              height: 20,
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 5,
+            left: 6,
+            child: Container(
+              width: 8,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isPlayer ? Colors.yellowAccent : Colors.redAccent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 5,
+            right: 6,
+            child: Container(
+              width: 8,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isPlayer ? Colors.yellowAccent : Colors.redAccent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -383,14 +448,52 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       ),
       child: Stack(
         children: [
-          Positioned(top: 0, left: 0, right: 0, child: Container(height: 10, color: Colors.black)),
-          Center(child: Container(width: 15, height: 30, decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)))),
-          Positioned(top: 15, left: -5, child: Container(width: 12, height: 20, color: Colors.black)),
-          Positioned(top: 15, right: -5, child: Container(width: 12, height: 20, color: Colors.black)),
-          Positioned(bottom: 10, left: -5, child: Container(width: 12, height: 20, color: Colors.black)),
-          Positioned(bottom: 10, right: -5, child: Container(width: 12, height: 20, color: Colors.black)),
-          Positioned(top: 5, left: 10, child: Container(width: 5, height: 2, color: Colors.cyanAccent)),
-          Positioned(top: 5, right: 10, child: Container(width: 5, height: 2, color: Colors.cyanAccent)),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(height: 10, color: Colors.black),
+          ),
+          Center(
+            child: Container(
+              width: 15,
+              height: 30,
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 15,
+            left: -5,
+            child: Container(width: 12, height: 20, color: Colors.black),
+          ),
+          Positioned(
+            top: 15,
+            right: -5,
+            child: Container(width: 12, height: 20, color: Colors.black),
+          ),
+          Positioned(
+            bottom: 10,
+            left: -5,
+            child: Container(width: 12, height: 20, color: Colors.black),
+          ),
+          Positioned(
+            bottom: 10,
+            right: -5,
+            child: Container(width: 12, height: 20, color: Colors.black),
+          ),
+          Positioned(
+            top: 5,
+            left: 10,
+            child: Container(width: 5, height: 2, color: Colors.cyanAccent),
+          ),
+          Positioned(
+            top: 5,
+            right: 10,
+            child: Container(width: 5, height: 2, color: Colors.cyanAccent),
+          ),
         ],
       ),
     );
@@ -408,8 +511,16 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
           ),
           child: Stack(
             children: [
-              Positioned(top: 5, left: 5, child: Container(width: 8, height: 4, color: Colors.orange)),
-              Positioned(top: 5, right: 5, child: Container(width: 8, height: 4, color: Colors.orange)),
+              Positioned(
+                top: 5,
+                left: 5,
+                child: Container(width: 8, height: 4, color: Colors.orange),
+              ),
+              Positioned(
+                top: 5,
+                right: 5,
+                child: Container(width: 8, height: 4, color: Colors.orange),
+              ),
             ],
           ),
         ),
@@ -422,7 +533,19 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
               borderRadius: BorderRadius.circular(4),
               border: Border.all(color: Colors.grey[300]!, width: 2),
             ),
-            child: const Center(child: RotatedBox(quarterTurns: 1, child: Text("DANGER", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 10)))),
+            child: const Center(
+              child: RotatedBox(
+                quarterTurns: 1,
+                child: Text(
+                  "DANGER",
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -437,7 +560,11 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildHeaderStat("SCORE", score.toString(), Colors.orangeAccent),
-            _buildHeaderStat("CHRONO", _formatTime(secondsElapsed), Colors.cyanAccent),
+            _buildHeaderStat(
+              "CHRONO",
+              _formatTime(secondsElapsed),
+              Colors.cyanAccent,
+            ),
           ],
         ),
       ),
@@ -455,8 +582,22 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-          Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
@@ -466,11 +607,14 @@ class _CarGameScreenState extends State<CarGameScreen> with TickerProviderStateM
 class RoadPainter extends CustomPainter {
   final double offset;
   final int lanes;
+
   RoadPainter({required this.offset, required this.lanes});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white24..strokeWidth = 2;
+    final paint = Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 2;
     double laneWidth = size.width / lanes;
 
     for (int i = 1; i < lanes; i++) {
@@ -480,7 +624,11 @@ class RoadPainter extends CustomPainter {
       double startY = offset % (dashHeight + dashSpace);
 
       while (startY < size.height) {
-        canvas.drawLine(Offset(x, startY), Offset(x, startY + dashHeight), paint);
+        canvas.drawLine(
+          Offset(x, startY),
+          Offset(x, startY + dashHeight),
+          paint,
+        );
         startY += dashHeight + dashSpace;
       }
 

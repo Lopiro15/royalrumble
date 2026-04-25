@@ -23,12 +23,13 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
   void initState() {
     super.initState();
 
-    // Définir le callback pour afficher le défi après le premier frame
+    // Réinitialiser complètement le store quand on arrive sur cet écran
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final store = Get.find<VersusStore>();
+      store.refreshMessageListener();
 
       store.onChallengeReceived = (challengerName) {
-        debugPrint('🎯 Affichage de la popup de défi pour: $challengerName');
+        debugPrint('🎯 Popup défi pour: $challengerName');
         if (mounted) {
           showDialog(
             context: context,
@@ -38,8 +39,7 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
               onAccept: () {
                 Navigator.pop(ctx);
                 store.acceptChallenge();
-                // L'invité voit l'écran d'attente
-                Get.to(() => const VersusSetupScreen(isHost: false));
+                Get.to(() => VersusSetupScreen(isHost: false));
               },
               onReject: () {
                 Navigator.pop(ctx);
@@ -57,9 +57,7 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
     final locationEnabled = await BluetoothPermissionService.isLocationEnabled();
     final bluetoothEnabled = await BluetoothPermissionService.isBluetoothEnabled();
 
-    if (allReady && locationEnabled && bluetoothEnabled) {
-      return true;
-    }
+    if (allReady && locationEnabled && bluetoothEnabled) return true;
 
     if (context.mounted) {
       final result = await showDialog<bool>(
@@ -81,215 +79,121 @@ class _VersusLobbyScreenState extends State<VersusLobbyScreen> {
     const Color primaryBlue = Color(0xFF001A33);
     const Color royalGold = Color(0xFFD4AF37);
 
-    return Scaffold(
-      backgroundColor: primaryBlue,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('MODE VERSUS', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () {
-            store.stopSearching();
-            Navigator.pop(context);
-          },
-        ),
-      ),
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF002147), primaryBlue],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-
-                  // Configuration des manches
-                  // _buildConfigSection(store, royalGold),
-
-                  const SizedBox(height: 20),
-
-                  // Boutons Rechercher / Héberger
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: MenuButton(
-                            label: 'RECHERCHER',
-                            icon: Icons.search_rounded,
-                            color: royalGold,
-                            fontSize: 16,
-                            onTap: () async {
-                              settingsManager.playClick();
-                              final ready = await _checkPermissionsBeforeAction(context);
-                              if (ready) {
-                                store.startSearching();
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: MenuButton(
-                            label: 'HÉBERGER',
-                            icon: Icons.wifi_rounded,
-                            color: Colors.white.withOpacity(0.9),
-                            textColor: primaryBlue,
-                            fontSize: 16,
-                            onTap: () async {
-                              settingsManager.playClick();
-                              final ready = await _checkPermissionsBeforeAction(context);
-                              if (ready) {
-                                store.startHosting();
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Indicateur de statut Bluetooth
-                  Obx(() {
-                    final status = store.bluetoothService.status.value;
-                    String text;
-                    Color color;
-                    IconData icon;
-
-                    switch (status) {
-                      case ConnectionStatus.advertising:
-                        text = '📡 En attente de connexion...';
-                        color = Colors.greenAccent;
-                        icon = Icons.wifi_rounded;
-                        break;
-                      case ConnectionStatus.discovering:
-                        text = '🔍 Recherche de joueurs...';
-                        color = Colors.blueAccent;
-                        icon = Icons.bluetooth_searching_rounded;
-                        break;
-                      case ConnectionStatus.connected:
-                        text = '✅ Connecté !';
-                        color = Colors.greenAccent;
-                        icon = Icons.link_rounded;
-                        break;
-                      default:
-                        text = '';
-                        color = Colors.white;
-                        icon = Icons.bluetooth_rounded;
-                    }
-
-                    if (text.isEmpty) return const SizedBox.shrink();
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: color.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(icon, color: color, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              text,
-                              style: TextStyle(color: color, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-
-                  const SizedBox(height: 10),
-
-                  // Liste des joueurs disponibles ou état vide
-                  Expanded(
-                    child: Obx(() {
-                      if (store.isSearching.value) {
-                        return _buildPlayerList(store, royalGold);
-                      } else {
-                        return _buildEmptyState(royalGold);
-                      }
-                    }),
-                  ),
-
-                  // Bouton retour
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
-                    child: MenuButton(
-                      label: 'RETOUR',
-                      icon: Icons.arrow_back_rounded,
-                      color: Colors.redAccent.withOpacity(0.8),
-                      fontSize: 18,
-                      onTap: () {
-                        store.stopSearching();
-                        Navigator.pop(context);
-                      },
-                    ).animate().fadeIn(delay: 500.ms),
-                  ),
-                ],
-              ),
-            ),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        store.disconnectAndReset();
+      },
+      child: Scaffold(
+        backgroundColor: primaryBlue,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('MODE VERSUS', style: TextStyle(color: Colors.white)),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+            onPressed: () {
+              store.disconnectAndReset();
+              Navigator.pop(context);
+            },
           ),
-
-          // Message de statut en bas
-          Obx(() {
-            if (store.statusMessage.value != null) {
-              return Positioned(
-                bottom: 100,
-                left: 20,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD4AF37).withOpacity(0.95),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.info_rounded, color: Color(0xFF001A33), size: 18),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          store.statusMessage.value!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFF001A33),
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        ),
+        body: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF002147), primaryBlue],
                 ),
-              ).animate().fadeIn().slideY(begin: 20);
-            }
-            return const SizedBox.shrink();
-          }),
-        ],
+              ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: MenuButton(
+                              label: 'RECHERCHER',
+                              icon: Icons.search_rounded,
+                              color: royalGold,
+                              fontSize: 16,
+                              onTap: () async {
+                                settingsManager.playClick();
+                                final ready = await _checkPermissionsBeforeAction(context);
+                                if (ready) store.startSearching();
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: MenuButton(
+                              label: 'HÉBERGER',
+                              icon: Icons.wifi_rounded,
+                              color: Colors.white.withOpacity(0.9),
+                              textColor: primaryBlue,
+                              fontSize: 16,
+                              onTap: () async {
+                                settingsManager.playClick();
+                                final ready = await _checkPermissionsBeforeAction(context);
+                                if (ready) store.startHosting();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    Expanded(
+                      child: Obx(() {
+                        if (store.isSearching.value) {
+                          return _buildPlayerList(store, royalGold);
+                        } else {
+                          return _buildEmptyState(royalGold);
+                        }
+                      }),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
+                      child: MenuButton(
+                        label: 'RETOUR',
+                        icon: Icons.arrow_back_rounded,
+                        color: Colors.redAccent.withOpacity(0.8),
+                        fontSize: 18,
+                        onTap: () {
+                          store.disconnectAndReset();
+                          Navigator.pop(context);
+                        },
+                      ).animate().fadeIn(delay: 500.ms),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Obx(() {
+              if (store.statusMessage.value != null) {
+                return Positioned(
+                  bottom: 100, left: 20, right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4AF37).withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(store.statusMessage.value!, textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF001A33), fontSize: 14, fontWeight: FontWeight.bold)),
+                  ),
+                ).animate().fadeIn().slideY(begin: 20);
+              }
+              return const SizedBox.shrink();
+            }),
+          ],
+        ),
       ),
     );
   }

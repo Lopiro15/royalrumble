@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get_navigation/src/root/get_material_app.dart';
+import 'package:get/get_navigation/src/routes/get_route.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:royalrumble/screens/versus/versus_lobby_screen.dart';
 import 'services/settings_manager.dart';
 import 'screens/play_menu_screen.dart';
 import 'widgets/menu_button.dart';
@@ -36,6 +38,9 @@ class MyApp extends StatelessWidget {
         ),
       ),
       home: const MainMenuScreen(),
+      getPages: [
+        GetPage(name: '/versus-lobby', page: () => const VersusLobbyScreen()),
+      ],
     );
   }
 }
