@@ -106,7 +106,6 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     }
 
     if (bestR != null && bestC != null && dotOwners[bestR][bestC] == Player.none) {
-      // Je joue mon coup (toujours en p1 = Or)
       dotOwners[bestR][bestC] = Player.p1;
       settingsManager.playClick();
       _checkNewSquares(bestR, bestC);
@@ -114,7 +113,6 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
       if (_isGridFull()) {
         _endGame();
       } else {
-        // En mode Versus, notifier l'adversaire et attendre
         if (isVersusMode) {
           isMyTurn = false;
           currentPlayer = Player.p2;
@@ -131,11 +129,9 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     }
   }
 
-  /// Reçoit le coup de l'adversaire (il joue en p2 = Bleu)
   void receiveOpponentMove(int row, int col) {
     if (isGameOver) return;
 
-    // L'adversaire place un point Bleu (p2)
     dotOwners[row][col] = Player.p2;
     settingsManager.playClick();
     _checkNewSquares(row, col);
@@ -143,7 +139,6 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     if (_isGridFull()) {
       _endGame();
     } else {
-      // C'est mon tour maintenant, je joue en Or (p1)
       isMyTurn = true;
       currentPlayer = Player.p1;
       turnNotifier.value = Player.p1;
@@ -160,13 +155,44 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
   void _evaluateSquare(int r, int c) {
     if (squareOwners[r][c] != Player.none) return;
     Player a = dotOwners[r][c];
-    Player b = dotOwners[r][c+1];
-    Player c2 = dotOwners[r+1][c];
-    Player d = dotOwners[r+1][c+1];
+    Player b = dotOwners[r][c + 1];
+    Player c2 = dotOwners[r + 1][c];
+    Player d = dotOwners[r + 1][c + 1];
     if (a != Player.none && a == b && a == c2 && a == d) {
       squareOwners[r][c] = a;
       if (a == Player.p1) p1Score.value++; else p2Score.value++;
     }
+  }
+
+  /// Compte les "presque carrés" pour un joueur (3 sommets sur 4)
+  int _countAlmostSquares(Player player) {
+    int count = 0;
+    Player opponent = player == Player.p1 ? Player.p2 : Player.p1;
+
+    for (int r = 0; r < gridSize - 1; r++) {
+      for (int c = 0; c < gridSize - 1; c++) {
+        if (squareOwners[r][c] != Player.none) continue; // déjà pris
+
+        int myDots = 0;
+        int oppDots = 0;
+
+        if (dotOwners[r][c] == player) myDots++;
+        if (dotOwners[r][c + 1] == player) myDots++;
+        if (dotOwners[r + 1][c] == player) myDots++;
+        if (dotOwners[r + 1][c + 1] == player) myDots++;
+
+        if (dotOwners[r][c] == opponent) oppDots++;
+        if (dotOwners[r][c + 1] == opponent) oppDots++;
+        if (dotOwners[r + 1][c] == opponent) oppDots++;
+        if (dotOwners[r + 1][c + 1] == opponent) oppDots++;
+
+        // 3 sommets à moi + 1 à l'adversaire
+        if (myDots == 3 && oppDots == 1) {
+          count++;
+        }
+      }
+    }
+    return count;
   }
 
   void _botMove() {
@@ -201,6 +227,19 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     if (isGameOver) return;
     isGameOver = true;
 
+    // Si égalité, départager avec les presque carrés
+    if (p1Score.value == p2Score.value) {
+      int p1Almost = _countAlmostSquares(Player.p1);
+      int p2Almost = _countAlmostSquares(Player.p2);
+      debugPrint('🤝 Égalité ! Presque carrés - Or: $p1Almost, Bleu: $p2Almost');
+
+      if (p1Almost >= p2Almost) {
+        p1Score.value++; // Bonus pour départager
+      } else {
+        p2Score.value++;
+      }
+    }
+
     if (p1Score.value > p2Score.value) {
       settingsManager.playVictory();
     } else {
@@ -229,7 +268,6 @@ class SquareFlameGame extends FlameGame with TapCallbacks {
     turnNotifier.value = Player.p1;
     isGameOver = false;
     _hasNotifiedSolo = false;
-    isMyTurn = isVersusMode ? true : true; // L'invité attend, l'hôte commence
     overlays.remove('GameOver');
     resumeEngine();
   }
