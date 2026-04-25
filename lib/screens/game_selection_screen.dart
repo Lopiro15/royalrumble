@@ -53,7 +53,7 @@ class GameSelectionScreen extends StatelessWidget {
       {
         'label': 'SQUARE CONQUEST',
         'icon': Icons.grid_view_rounded,
-        'screen': const SquareGameScreen(vsBot: true),
+        'screen': const SquareGameScreen(vsBot: true, startsFirst: true,),
         'color': royalGold,
       },
       {

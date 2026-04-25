@@ -81,7 +81,7 @@ class _SoloGameRunnerScreenState extends State<SoloGameRunnerScreen> {
           vsBot: true,
           onSoloGameFinished: (score, maxScore) {
             store.recordGameResult(score: score, maxScore: maxScore);
-          },
+          }, startsFirst: true,
         );
       case 'AIR HOCKEY':
         return AirHockeyScreen(
