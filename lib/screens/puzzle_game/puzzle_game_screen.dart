@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
 import '../../widgets/countdown_overlay.dart';
-import '../../widgets/menu_button.dart';
 
 class PuzzleGameScreen extends StatefulWidget {
   final Function(int score, int maxScore)? onSoloGameFinished;
+  final Function(int score, bool isDead)? onVersusGameFinished;
+  final List<int>? forcedTiles; // Pour le mode Versus : disposition identique
 
-  const PuzzleGameScreen({super.key, this.onSoloGameFinished});
+  const PuzzleGameScreen({
+    super.key,
+    this.onSoloGameFinished,
+    this.onVersusGameFinished,
+    this.forcedTiles,
+  });
 
   @override
   State<PuzzleGameScreen> createState() => _PuzzleGameScreenState();
@@ -26,40 +33,49 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   bool isWon = false;
   bool showOriginal = false;
   bool _hasNotifiedSolo = false;
+  bool _hasNotifiedVersus = false;
 
-  // Score maximum pour Puzzle (calculé à la victoire)
   int get _calculatedMaxScore => 1000;
 
   @override
   void initState() {
     super.initState();
     tiles = List.generate(gridSize * gridSize, (index) => index);
+
+    if (widget.forcedTiles != null) {
+      // Mode Versus : utiliser la disposition forcée
+      tiles = List.from(widget.forcedTiles!);
+    }
   }
 
   void _resetGame() {
-    tiles = List.generate(gridSize * gridSize, (index) => index);
+    if (widget.forcedTiles != null) {
+      // Mode Versus : réutiliser la même disposition
+      tiles = List.from(widget.forcedTiles!);
+    } else {
+      tiles = List.generate(gridSize * gridSize, (index) => index);
+      _shuffleTiles();
+    }
+
     moves = 0;
     secondsElapsed = 0;
     isWon = false;
     isGameStarted = false;
     showOriginal = false;
     _hasNotifiedSolo = false;
+    _hasNotifiedVersus = false;
     timer?.cancel();
-    _shuffleTiles();
     setState(() {});
   }
 
   void _startTimer() {
     isGameStarted = true;
     timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() {
-        secondsElapsed++;
-      });
+      setState(() => secondsElapsed++);
     });
   }
 
   void _shuffleTiles() {
-    tiles = List.generate(gridSize * gridSize, (index) => index);
     int emptyIndex = gridSize * gridSize - 1;
     for (int i = 0; i < 200; i++) {
       List<int> validMoves = _getValidMoves(emptyIndex);
@@ -97,8 +113,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   }
 
   int _calculateScore() {
-    // Score basé sur le temps et le nombre de coups
-    // Moins de temps et moins de coups = meilleur score
     int timePenalty = (secondsElapsed * 2).clamp(0, 500);
     int movePenalty = (moves * 5).clamp(0, 300);
     return (_calculatedMaxScore - timePenalty - movePenalty).clamp(100, _calculatedMaxScore);
@@ -127,14 +141,21 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
         widget.onSoloGameFinished!(finalScore, _calculatedMaxScore);
       }
 
-      Future.delayed(const Duration(seconds: 2), () {
+      // Notifier le mode Versus (isDead=false car on a gagné)
+      if (widget.onVersusGameFinished != null && !_hasNotifiedVersus) {
+        _hasNotifiedVersus = true;
+        widget.onVersusGameFinished!(finalScore, false);
+      }
+
+      Future.delayed(const Duration(milliseconds: 500), () {
         _showWinDialog(finalScore);
       });
     }
   }
 
   void _showWinDialog(int finalScore) {
-    final bool isSoloMode = widget.onSoloGameFinished != null;
+    final bool isVersusMode = widget.onVersusGameFinished != null;
+    final bool isSoloMode = widget.onSoloGameFinished != null && !isVersusMode;
 
     showDialog(
       context: context,
@@ -151,29 +172,20 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
             Text('SCORE: $finalScore', style: const TextStyle(color: Colors.white, fontSize: 18)),
             Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
             Text('COUPS : $moves', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            if (isVersusMode) ...[
+              const SizedBox(height: 8),
+              const Text('En attente de l\'adversaire...', style: TextStyle(color: Colors.orangeAccent, fontSize: 13)),
+            ],
           ],
         ),
         actions: [
-          if (isSoloMode) ...[
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37))),
-            ),
+          if (isVersusMode) ...[
+            const SizedBox.shrink(),
+          ] else if (isSoloMode) ...[
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37)))),
           ] else ...[
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _resetGame();
-              },
-              child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text('MENU', style: TextStyle(color: Colors.white70)),
-            ),
+            TextButton(onPressed: () { Navigator.pop(context); _resetGame(); }, child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37)))),
+            TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text('MENU', style: TextStyle(color: Colors.white70))),
           ],
         ],
       ),
@@ -238,44 +250,25 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                 const SizedBox(height: 20),
                 Center(
                   child: Container(
-                    width: puzzleSize,
-                    height: puzzleSize,
+                    width: puzzleSize, height: puzzleSize,
                     padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: royalGold.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    decoration: BoxDecoration(color: royalGold.withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
                     child: showOriginal
-                        ? ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.asset('assets/logo.png', fit: BoxFit.fill),
-                    ).animate().fadeIn()
+                        ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.asset('assets/logo.png', fit: BoxFit.fill)).animate().fadeIn()
                         : GridView.builder(
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: gridSize,
-                        crossAxisSpacing: 4,
-                        mainAxisSpacing: 4,
-                      ),
+                          crossAxisCount: gridSize, crossAxisSpacing: 4, mainAxisSpacing: 4),
                       itemCount: tiles.length,
                       itemBuilder: (context, index) {
                         int tileValue = tiles[index];
-
                         if (isWon && tileValue == 8) {
                           return Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: royalGold, width: 1),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: _getTileImage(8),
-                            ),
+                            decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: royalGold, width: 1)),
+                            child: ClipRRect(borderRadius: BorderRadius.circular(4), child: _getTileImage(8)),
                           ).animate().fadeIn(duration: 800.ms);
                         }
-
                         if (tileValue == 8) return Container(color: Colors.black12);
-
                         return GestureDetector(
                           onPanEnd: (details) {
                             if (details.velocity.pixelsPerSecond.dx.abs() > details.velocity.pixelsPerSecond.dy.abs()) {
@@ -287,14 +280,8 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                             }
                           },
                           child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: royalGold, width: 1),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: _getTileImage(tileValue),
-                            ),
+                            decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: royalGold, width: 1)),
+                            child: ClipRRect(borderRadius: BorderRadius.circular(4), child: _getTileImage(tileValue)),
                           ),
                         );
                       },
@@ -332,36 +319,24 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   Widget _buildInfoCard(String title, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.black26,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5)),
-      ),
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold)),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5))),
+      child: Column(children: [
+        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(value, style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 
   Widget _getTileImage(int tileValue) {
     int row = tileValue ~/ gridSize;
     int col = tileValue % gridSize;
-
     return FractionalTranslation(
       translation: Offset(-col.toDouble(), -row.toDouble()),
       child: OverflowBox(
-        maxWidth: puzzleSize,
-        maxHeight: puzzleSize,
-        minWidth: puzzleSize,
-        minHeight: puzzleSize,
+        maxWidth: puzzleSize, maxHeight: puzzleSize,
+        minWidth: puzzleSize, minHeight: puzzleSize,
         alignment: Alignment.topLeft,
-        child: Image.asset(
-          'assets/logo.png',
-          fit: BoxFit.fill,
-        ),
+        child: Image.asset('assets/logo.png', fit: BoxFit.fill),
       ),
     );
   }

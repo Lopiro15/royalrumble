@@ -1,10 +1,10 @@
-import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:royalrumble/screens/play_menu_screen.dart';
 import '../../stores/versus_store.dart';
 import '../../services/settings_manager.dart';
-import '../hanoi_game/hanoi_game_screen.dart';
+import '../puzzle_game/puzzle_game_screen.dart';
 
 class VersusGameScreen extends StatefulWidget {
   const VersusGameScreen({super.key});
@@ -16,34 +16,72 @@ class VersusGameScreen extends StatefulWidget {
 class _VersusGameScreenState extends State<VersusGameScreen> {
   final VersusStore store = Get.find<VersusStore>();
 
-  bool _roundEnded = false; // Flag pour arrêter tout
+  bool _roundEnded = false;
   bool _iFinished = false;
   int? _myScore;
   bool _opponentFinished = false;
   int? _opponentScore;
   bool _resultShown = false;
 
-  final int _numDisks = 5;
+  // Disposition des tuiles synchronisée
+  late final List<int> _syncedTiles;
+  late final int _syncedSeed;
 
-  String get _gameType => 'hanoiScore';
+  String get _gameType => 'puzzleScore';
 
   @override
   void initState() {
     super.initState();
+
+    // Générer une seed aléatoire commune
+    _syncedSeed = DateTime.now().millisecond;
+    _syncedTiles = _generateTilesFromSeed(_syncedSeed);
+
     _setupListener();
 
+    // Envoyer la seed à l'adversaire pour qu'il ait la même disposition
     store.bluetoothService.sendMessage({
-      'type': 'hanoiSetup',
-      'data': {'numDisks': _numDisks},
+      'type': 'puzzleSetup',
+      'data': {'seed': _syncedSeed},
     });
+  }
+
+  List<int> _generateTilesFromSeed(int seed) {
+    final random = Random(seed);
+    List<int> tiles = List.generate(9, (i) => i);
+    int emptyIndex = 8;
+    for (int i = 0; i < 200; i++) {
+      List<int> validMoves = [];
+      int row = emptyIndex ~/ 3;
+      int col = emptyIndex % 3;
+      if (row > 0) validMoves.add(emptyIndex - 3);
+      if (row < 2) validMoves.add(emptyIndex + 3);
+      if (col > 0) validMoves.add(emptyIndex - 1);
+      if (col < 2) validMoves.add(emptyIndex + 1);
+      int nextIndex = validMoves[random.nextInt(validMoves.length)];
+      int temp = tiles[emptyIndex];
+      tiles[emptyIndex] = tiles[nextIndex];
+      tiles[nextIndex] = temp;
+      emptyIndex = nextIndex;
+    }
+    return tiles;
   }
 
   void _setupListener() {
     store.bluetoothService.onMessageReceived = (message) {
-      if (_roundEnded) return; // Ignorer tout si le round est terminé
+      if (_roundEnded) return;
 
       final type = message['type'] as String?;
       final data = message['data'] as Map<String, dynamic>?;
+
+      if (type == 'puzzleSetup') {
+        // Recevoir la seed de l'adversaire
+        final seed = data?['seed'] as int?;
+        if (seed != null) {
+          _syncedTiles = _generateTilesFromSeed(seed ?? 42);
+          debugPrint('🧩 Puzzle synced with seed: $seed');
+        }
+      }
 
       if (type == _gameType) {
         setState(() {
@@ -51,25 +89,21 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
           _opponentFinished = data?['finished'] as bool? ?? false;
         });
 
-        // L'adversaire a fini → arrêter immédiatement
         if (_opponentFinished && !_iFinished) {
           _roundEnded = true;
-          _myScore = data?['myScore'] as int? ?? 0; // Score forcé si on n'a pas fini
+          _myScore ??= 0;
           _showResult();
         }
 
-        // Les deux ont fini
         if (_iFinished && _opponentFinished && !_resultShown) {
           _showResult();
         }
       }
 
-      // Message de fin de round forcé
       if (type == 'roundEnd' && !_roundEnded) {
         _roundEnded = true;
         _opponentScore = data?['score'] as int?;
         _opponentFinished = true;
-        // Forcer notre score actuel (0 si pas fini)
         _myScore ??= 0;
         if (!_resultShown) _showResult();
       }
@@ -81,11 +115,10 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
 
     _myScore = score;
     _iFinished = true;
-    _roundEnded = true; // J'ai fini, le round est terminé
+    _roundEnded = true;
 
-    // Envoyer mon score ET forcer la fin du round chez l'adversaire
     store.bluetoothService.sendMessage({
-      'type': 'roundEnd', // Message prioritaire pour arrêter l'autre
+      'type': 'roundEnd',
       'data': {'score': score},
     });
 
@@ -94,7 +127,6 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
       'data': {'score': score, 'finished': true},
     });
 
-    // Attendre un peu puis afficher le résultat
     Future.delayed(const Duration(milliseconds: 800), () {
       if (!_resultShown && mounted) _showResult();
     });
@@ -106,7 +138,7 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
 
     final myScore = _myScore ?? 0;
     final oppScore = _opponentScore ?? 0;
-    final iWon = _iFinished; // Celui qui a fini en premier gagne
+    final iWon = _iFinished;
 
     if (iWon) {
       settingsManager.playVictory();
@@ -188,8 +220,8 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
       child: Scaffold(
         body: Stack(
           children: [
-            HanoiGameScreen(
-              forcedNumDisks: _numDisks,
+            PuzzleGameScreen(
+              forcedTiles: _syncedTiles,
               onVersusGameFinished: _onMyGameFinished,
             ),
             SafeArea(
@@ -200,13 +232,12 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
                   child: Text(
-                    _opponentFinished ? 'Adv: ${_opponentScore ?? "?"} pts ✅' : 'Adv: en cours 🧠',
+                    _opponentFinished ? 'Adv: ${_opponentScore ?? "?"} pts ✅' : 'Adv: en cours 🧩',
                     style: TextStyle(color: _opponentFinished ? Colors.greenAccent : Colors.orangeAccent, fontSize: 11),
                   ),
                 ),
               ),
             ),
-            // Overlay "L'adversaire a gagné !" si on n'a pas fini
             if (_roundEnded && !_iFinished)
               Container(
                 color: Colors.black54,
