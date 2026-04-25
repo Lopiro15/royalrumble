@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:royalrumble/screens/play_menu_screen.dart';
-import 'package:royalrumble/screens/versus/versus_lobby_screen.dart';
 import '../../stores/versus_store.dart';
 import '../../services/settings_manager.dart';
-import '../meteor_game/meteor_game_screen.dart';
+import '../hanoi_game/hanoi_game_screen.dart';
 
 class VersusGameScreen extends StatefulWidget {
   const VersusGameScreen({super.key});
@@ -16,73 +16,99 @@ class VersusGameScreen extends StatefulWidget {
 class _VersusGameScreenState extends State<VersusGameScreen> {
   final VersusStore store = Get.find<VersusStore>();
 
+  bool _roundEnded = false; // Flag pour arrêter tout
+  bool _iFinished = false;
   int? _myScore;
-  bool _iAmDead = false;
+  bool _opponentFinished = false;
   int? _opponentScore;
-  bool _opponentIsDead = false;
   bool _resultShown = false;
-  bool _waitingReplay = false;
-  bool _opponentWantsReplay = false;
 
-  String get _gameType => 'meteorScore';
+  final int _numDisks = 5;
+
+  String get _gameType => 'hanoiScore';
 
   @override
   void initState() {
     super.initState();
     _setupListener();
+
+    store.bluetoothService.sendMessage({
+      'type': 'hanoiSetup',
+      'data': {'numDisks': _numDisks},
+    });
   }
 
   void _setupListener() {
     store.bluetoothService.onMessageReceived = (message) {
+      if (_roundEnded) return; // Ignorer tout si le round est terminé
+
       final type = message['type'] as String?;
       final data = message['data'] as Map<String, dynamic>?;
 
-      if (type == _gameType && mounted) {
+      if (type == _gameType) {
         setState(() {
           _opponentScore = data?['score'] as int?;
-          _opponentIsDead = data?['isDead'] as bool? ?? false;
+          _opponentFinished = data?['finished'] as bool? ?? false;
         });
-        if (_iAmDead && _opponentIsDead && !_resultShown) _showResult();
+
+        // L'adversaire a fini → arrêter immédiatement
+        if (_opponentFinished && !_iFinished) {
+          _roundEnded = true;
+          _myScore = data?['myScore'] as int? ?? 0; // Score forcé si on n'a pas fini
+          _showResult();
+        }
+
+        // Les deux ont fini
+        if (_iFinished && _opponentFinished && !_resultShown) {
+          _showResult();
+        }
       }
 
-      if (type == 'replayRequest' && mounted) {
-        setState(() => _opponentWantsReplay = true);
-        if (_waitingReplay && _opponentWantsReplay) _bothReady();
-      }
-
-      if (type == 'replayAccepted' && mounted) {
-        _restartGame();
+      // Message de fin de round forcé
+      if (type == 'roundEnd' && !_roundEnded) {
+        _roundEnded = true;
+        _opponentScore = data?['score'] as int?;
+        _opponentFinished = true;
+        // Forcer notre score actuel (0 si pas fini)
+        _myScore ??= 0;
+        if (!_resultShown) _showResult();
       }
     };
   }
 
   void _onMyGameFinished(int score, bool isDead) {
+    if (_roundEnded) return;
+
     _myScore = score;
-    _iAmDead = isDead;
+    _iFinished = true;
+    _roundEnded = true; // J'ai fini, le round est terminé
+
+    // Envoyer mon score ET forcer la fin du round chez l'adversaire
+    store.bluetoothService.sendMessage({
+      'type': 'roundEnd', // Message prioritaire pour arrêter l'autre
+      'data': {'score': score},
+    });
 
     store.bluetoothService.sendMessage({
       'type': _gameType,
-      'data': {'score': score, 'isDead': isDead},
+      'data': {'score': score, 'finished': true},
     });
 
-    if (_opponentIsDead && !_resultShown) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!_resultShown && mounted) _showResult();
-      });
-    }
+    // Attendre un peu puis afficher le résultat
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!_resultShown && mounted) _showResult();
+    });
   }
 
   void _showResult() {
+    if (_resultShown) return;
     _resultShown = true;
 
     final myScore = _myScore ?? 0;
     final oppScore = _opponentScore ?? 0;
-    final isDraw = myScore == oppScore;
-    final won = myScore > oppScore;
+    final iWon = _iFinished; // Celui qui a fini en premier gagne
 
-    if (isDraw) {
-      settingsManager.playClick();
-    } else if (won) {
+    if (iWon) {
       settingsManager.playVictory();
     } else {
       settingsManager.playDefeat();
@@ -91,93 +117,45 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF001A33),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), width: 2),
-          ),
-          title: Text(isDraw ? '🤝 MATCH NUL !' : (won ? '🏆 VICTOIRE !' : '😓 DÉFAITE...'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), fontSize: 24),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(isDraw ? Icons.handshake_rounded : (won ? Icons.emoji_events : Icons.sentiment_dissatisfied),
-                  color: isDraw ? Colors.orangeAccent : (won ? const Color(0xFFD4AF37) : Colors.redAccent), size: 60),
-              const SizedBox(height: 20),
-              Text('VOUS: $myScore pts', style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 20, fontWeight: FontWeight.bold)),
-              Text('ADVERSAIRE: $oppScore pts', style: const TextStyle(color: Colors.blueAccent, fontSize: 20, fontWeight: FontWeight.bold)),
-              if (isDraw) ...[
-                const SizedBox(height: 16),
-                _chip('Vous', _waitingReplay),
-                const SizedBox(height: 4),
-                _chip('Adversaire', _opponentWantsReplay),
-              ],
-            ],
-          ),
-          actions: [
-            if (isDraw)
-              Center(
-                child: ElevatedButton.icon(
-                  icon: Icon(_waitingReplay ? Icons.check_circle : Icons.replay_rounded),
-                  label: Text(_waitingReplay ? 'EN ATTENTE...' : 'REJOUER'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _waitingReplay ? Colors.grey : Colors.orangeAccent,
-                    foregroundColor: const Color(0xFF001A33),
-                  ),
-                  onPressed: _waitingReplay ? null : () {
-                    setState(() => _waitingReplay = true);
-                    setDialogState(() {});
-                    store.bluetoothService.sendMessage({'type': 'replayRequest', 'data': {}});
-                    if (_opponentWantsReplay) _bothReady();
-                  },
-                ),
-              ),
-            if (!isDraw)
-              Center(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('CONTINUER'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    store.disconnectAndReset();
-                    Get.offAll(() => const PlayMenuScreen());
-                  },
-                ),
-              ),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF001A33),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: iWon ? const Color(0xFFD4AF37) : Colors.redAccent, width: 2),
+        ),
+        title: Text(
+          iWon ? '🏆 VICTOIRE !' : '😓 DÉFAITE...',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: iWon ? const Color(0xFFD4AF37) : Colors.redAccent, fontSize: 24),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(iWon ? Icons.emoji_events : Icons.sentiment_dissatisfied,
+                color: iWon ? const Color(0xFFD4AF37) : Colors.redAccent, size: 60),
+            const SizedBox(height: 20),
+            Text('VOUS: ${iWon ? "$myScore pts ✅" : "Pas fini ❌"}',
+                style: TextStyle(color: iWon ? const Color(0xFFD4AF37) : Colors.redAccent, fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('ADVERSAIRE: ${_opponentFinished ? "${oppScore} pts" : "Pas fini"}',
+                style: TextStyle(color: _opponentFinished ? Colors.blueAccent : Colors.white70, fontSize: 18)),
           ],
         ),
+        actions: [
+          Center(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: const Text('CONTINUER'),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                store.disconnectAndReset();
+                Get.offAll(() => const PlayMenuScreen());
+              },
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  Widget _chip(String label, bool ready) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ready ? Icons.check_circle : Icons.hourglass_empty, color: ready ? Colors.greenAccent : Colors.white38, size: 16),
-        const SizedBox(width: 6),
-        Text('$label : ${ready ? "Prêt !" : "En attente..."}', style: TextStyle(color: ready ? Colors.greenAccent : Colors.white54, fontSize: 12)),
-      ]),
-    );
-  }
-
-  void _bothReady() {
-    store.bluetoothService.sendMessage({'type': 'replayAccepted', 'data': {}});
-    _restartGame();
-  }
-
-  void _restartGame() {
-    // Fermer la popup
-    if (Navigator.canPop(context)) Navigator.pop(context);
-
-    // Remplacer l'écran entier par un nouveau (propre)
-    Get.off(() => const VersusGameScreen());
   }
 
   @override
@@ -198,7 +176,7 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                     Navigator.pop(ctx);
                     store.bluetoothService.sendMessage({'type': 'disconnect', 'data': {}});
                     store.disconnectAndReset();
-                    Get.offAll(() => const VersusLobbyScreen());
+                    Get.offAll(() => const PlayMenuScreen());
                   },
                   child: const Text('QUITTER', style: TextStyle(color: Colors.redAccent)),
                 ),
@@ -210,7 +188,10 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
       child: Scaffold(
         body: Stack(
           children: [
-            MeteorGameScreen(onVersusGameFinished: _onMyGameFinished),
+            HanoiGameScreen(
+              forcedNumDisks: _numDisks,
+              onVersusGameFinished: _onMyGameFinished,
+            ),
             SafeArea(
               child: Align(
                 alignment: Alignment.topCenter,
@@ -219,12 +200,20 @@ class _VersusGameScreenState extends State<VersusGameScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
                   child: Text(
-                    _opponentIsDead ? 'Adv: ${_opponentScore ?? "?"} pts ☠️' : 'Adv: en vie 🛸',
-                    style: TextStyle(color: _opponentIsDead ? Colors.redAccent : Colors.greenAccent, fontSize: 11),
+                    _opponentFinished ? 'Adv: ${_opponentScore ?? "?"} pts ✅' : 'Adv: en cours 🧠',
+                    style: TextStyle(color: _opponentFinished ? Colors.greenAccent : Colors.orangeAccent, fontSize: 11),
                   ),
                 ),
               ),
             ),
+            // Overlay "L'adversaire a gagné !" si on n'a pas fini
+            if (_roundEnded && !_iFinished)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Text('⏰ L\'adversaire a terminé !', style: TextStyle(color: Colors.orangeAccent, fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+              ),
           ],
         ),
       ),

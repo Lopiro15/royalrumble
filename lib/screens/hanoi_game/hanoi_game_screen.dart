@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/settings_manager.dart';
 import '../../widgets/countdown_overlay.dart';
-import '../../widgets/menu_button.dart';
 
 class HanoiGameScreen extends StatefulWidget {
   final Function(int score, int maxScore)? onSoloGameFinished;
+  final Function(int score, bool isDead)? onVersusGameFinished;
+  final int? forcedNumDisks; // Pour le mode Versus : synchro du nombre de disques
 
-  const HanoiGameScreen({super.key, this.onSoloGameFinished});
+  const HanoiGameScreen({
+    super.key,
+    this.onSoloGameFinished,
+    this.onVersusGameFinished,
+    this.forcedNumDisks,
+  });
 
   @override
   State<HanoiGameScreen> createState() => _HanoiGameScreenState();
@@ -26,24 +32,20 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   bool isGameStarted = false;
   bool isWon = false;
   bool _hasNotifiedSolo = false;
+  bool _hasNotifiedVersus = false;
 
-  // Score maximum pour Hanoi (varie selon le nombre de disques)
   int get _maxPossibleScore => numDisks * 250;
 
   final List<Color> availableColors = [
-    Colors.redAccent,
-    Colors.blueAccent,
-    Colors.greenAccent,
-    Colors.orangeAccent,
-    Colors.purpleAccent,
-    Colors.tealAccent,
-    Colors.pinkAccent,
+    Colors.redAccent, Colors.blueAccent, Colors.greenAccent,
+    Colors.orangeAccent, Colors.purpleAccent, Colors.tealAccent, Colors.pinkAccent,
   ];
 
   @override
   void initState() {
     super.initState();
-    numDisks = Random().nextInt(3) + 4;
+    // Utiliser le nombre de disques forcé (Versus) ou aléatoire
+    numDisks = widget.forcedNumDisks ?? (Random().nextInt(3) + 4);
     _resetGame();
   }
 
@@ -62,6 +64,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
     isWon = false;
     isGameStarted = false;
     _hasNotifiedSolo = false;
+    _hasNotifiedVersus = false;
     timer?.cancel();
     setState(() {});
   }
@@ -69,15 +72,12 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   void _startTimer() {
     isGameStarted = true;
     timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() {
-        secondsElapsed++;
-      });
+      setState(() => secondsElapsed++);
     });
   }
 
   void _moveDisk(int from, int to) {
-    if (pegs[from].isEmpty) return;
-
+    if (pegs[from].isEmpty || isWon) return;
     int diskToMove = pegs[from].last;
 
     if (pegs[to].isEmpty || pegs[to].last > diskToMove) {
@@ -92,8 +92,6 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   }
 
   int _calculateScore() {
-    // Score basé sur le nombre de disques, le temps et les coups
-    // Le nombre minimum de coups pour n disques est 2^n - 1
     int minMoves = (1 << numDisks) - 1;
     int moveBonus = moves <= minMoves * 2 ? 100 : (moves <= minMoves * 3 ? 50 : 0);
     int timePenalty = (secondsElapsed ~/ 10).clamp(0, 100);
@@ -116,12 +114,19 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
         widget.onSoloGameFinished!(finalScore, _maxPossibleScore);
       }
 
+      // Notifier le mode Versus (isDead=false car on a gagné)
+      if (widget.onVersusGameFinished != null && !_hasNotifiedVersus) {
+        _hasNotifiedVersus = true;
+        widget.onVersusGameFinished!(finalScore, false);
+      }
+
       _showWinDialog(finalScore);
     }
   }
 
   void _showWinDialog(int finalScore) {
-    final bool isSoloMode = widget.onSoloGameFinished != null;
+    final bool isVersusMode = widget.onVersusGameFinished != null;
+    final bool isSoloMode = widget.onSoloGameFinished != null && !isVersusMode;
 
     showDialog(
       context: context,
@@ -139,29 +144,21 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
             Text('DISQUES : $numDisks', style: const TextStyle(color: Colors.white70)),
             Text('TEMPS : ${_formatTime(secondsElapsed)}', style: const TextStyle(color: Colors.white70)),
             Text('COUPS : $moves', style: const TextStyle(color: Colors.white70)),
+            if (isVersusMode) ...[
+              const SizedBox(height: 8),
+              const Text('En attente de l\'adversaire...', style: TextStyle(color: Colors.orangeAccent, fontSize: 13)),
+            ],
           ],
         ),
         actions: [
-          if (isSoloMode) ...[
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37))),
-            ),
+          if (isVersusMode) ...[
+            // En mode Versus, pas de bouton (le VersusGameScreen gère)
+            const SizedBox.shrink(),
+          ] else if (isSoloMode) ...[
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('TERMINÉ', style: TextStyle(color: Color(0xFFD4AF37)))),
           ] else ...[
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _resetGame();
-              },
-              child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37))),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text('MENU', style: TextStyle(color: Colors.white70)),
-            ),
+            TextButton(onPressed: () { Navigator.pop(context); _resetGame(); }, child: const Text('REJOUER', style: TextStyle(color: Color(0xFFD4AF37)))),
+            TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text('MENU', style: TextStyle(color: Colors.white70))),
           ],
         ],
       ),
@@ -247,9 +244,7 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
     return DragTarget<Map<String, int>>(
       onWillAccept: (data) {
         if (isWon || data == null) return false;
-        int fromPeg = data['fromPeg']!;
         int diskSize = data['diskSize']!;
-
         return pegs[pegIndex].isEmpty || pegs[pegIndex].last > diskSize;
       },
       onAccept: (data) {
@@ -262,22 +257,8 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
           child: Stack(
             alignment: Alignment.bottomCenter,
             children: [
-              Container(
-                width: 10,
-                height: 220,
-                decoration: BoxDecoration(
-                  color: candidateData.isNotEmpty ? gold : gold.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-              Container(
-                width: 80,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: gold.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+              Container(width: 10, height: 220, decoration: BoxDecoration(color: candidateData.isNotEmpty ? gold : gold.withOpacity(0.2), borderRadius: BorderRadius.circular(5))),
+              Container(width: 80, height: 5, decoration: BoxDecoration(color: gold.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Column(
@@ -285,15 +266,11 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
                   children: List.generate(pegs[pegIndex].length, (i) {
                     int diskSize = pegs[pegIndex][i];
                     bool isTopDisk = i == pegs[pegIndex].length - 1;
-
                     if (isTopDisk && !isWon) {
                       return Draggable<Map<String, int>>(
                         data: {'fromPeg': pegIndex, 'diskSize': diskSize},
                         feedback: _buildDisk(diskSize, diskColors[diskSize], true),
-                        childWhenDragging: Opacity(
-                          opacity: 0.3,
-                          child: _buildDisk(diskSize, diskColors[diskSize]),
-                        ),
+                        childWhenDragging: Opacity(opacity: 0.3, child: _buildDisk(diskSize, diskColors[diskSize])),
                         child: _buildDisk(diskSize, diskColors[diskSize]),
                       );
                     }
@@ -310,41 +287,18 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
 
   Widget _buildDisk(int size, Color color, [bool isFeedback = false]) {
     double width = 40.0 + (size * 12.0);
-
     return Material(
       color: Colors.transparent,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
-        width: width,
-        height: 24,
+        width: width, height: 24,
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: isFeedback ? 10 : 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-          gradient: LinearGradient(
-            colors: [color, color.withOpacity(0.6)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: color, borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: isFeedback ? 10 : 4, offset: const Offset(0, 2))],
+          gradient: LinearGradient(colors: [color, color.withOpacity(0.6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
           border: Border.all(color: Colors.white24, width: 1),
         ),
-        child: Center(
-          child: Text(
-            size.toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              shadows: [Shadow(blurRadius: 2, color: Colors.black54)],
-            ),
-          ),
-        ),
+        child: Center(child: Text(size.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, shadows: [Shadow(blurRadius: 2, color: Colors.black54)]))),
       ),
     );
   }
@@ -352,17 +306,11 @@ class _HanoiGameScreenState extends State<HanoiGameScreen> {
   Widget _buildInfoCard(String title, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.black26,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5)),
-      ),
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold)),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5))),
+      child: Column(children: [
+        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(value, style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }
