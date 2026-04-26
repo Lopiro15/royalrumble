@@ -1,9 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ---------------------------------------------------------------------------
-// ScoreManager — Singleton de gestion des meilleurs scores
-// ---------------------------------------------------------------------------
 class ScoreManager {
   static final ScoreManager _instance = ScoreManager._internal();
   factory ScoreManager() => _instance;
@@ -11,7 +8,6 @@ class ScoreManager {
 
   late SharedPreferences _prefs;
   bool _initialized = false;
-
   static const int _maxEntries = 10;
 
   Future<void> init() async {
@@ -45,21 +41,27 @@ class ScoreManager {
   }
 
   Future<void> saveScore({
-    required int    score,
-    required int    maxScore,
+    required int score,
+    required int maxScore,
     required String gameMode,
     required String playerName,
     required String gameName,
+    String? opponentName,
+    bool? won,
+    String? finalScore,
   }) async {
     await _ensureInit();
 
     final entry = ScoreEntry(
-      score:      score,
-      maxScore:   maxScore,
-      gameMode:   gameMode,
+      score: score,
+      maxScore: maxScore,
+      gameMode: gameMode,
       playerName: playerName,
-      gameName:   gameName,
-      date:       DateTime.now(),
+      gameName: gameName,
+      date: DateTime.now(),
+      opponentName: opponentName,
+      won: won,
+      finalScore: finalScore,
     );
 
     final scores = await getScores(gameMode);
@@ -81,16 +83,16 @@ class ScoreManager {
   String _keyFor(String gameMode) => 'best_scores_$gameMode';
 }
 
-// ---------------------------------------------------------------------------
-// ScoreEntry — Modèle d'une entrée de score
-// ---------------------------------------------------------------------------
 class ScoreEntry {
-  final int    score;
-  final int    maxScore;
+  final int score;
+  final int maxScore;
   final String gameMode;
   final String gameName;
   final String playerName;
   final DateTime date;
+  final String? opponentName; // Pour le mode Versus
+  final bool? won;            // true = gagné, false = perdu
+  final String? finalScore;   // "3-1", "2-3", etc.
 
   const ScoreEntry({
     required this.score,
@@ -99,24 +101,33 @@ class ScoreEntry {
     required this.gameName,
     required this.playerName,
     required this.date,
+    this.opponentName,
+    this.won,
+    this.finalScore,
   });
 
   factory ScoreEntry.fromJson(Map<String, dynamic> json) => ScoreEntry(
-    score:      json['score']      as int,
-    maxScore:   json['maxScore']   as int,
-    gameMode:   json['gameMode']   as String,
-    gameName:   (json['gameName']  as String?) ?? 'QUIZ',
-    playerName: json['playerName'] as String,
-    date:       DateTime.parse(json['date'] as String),
+    score:        json['score']        as int,
+    maxScore:     json['maxScore']     as int,
+    gameMode:     json['gameMode']     as String,
+    gameName:     (json['gameName']    as String?) ?? 'QUIZ',
+    playerName:   json['playerName']   as String,
+    date:         DateTime.parse(json['date'] as String),
+    opponentName: json['opponentName'] as String?,
+    won:          json['won']          as bool?,
+    finalScore:   json['finalScore']   as String?,
   );
 
   Map<String, dynamic> toJson() => {
-    'score':      score,
-    'maxScore':   maxScore,
-    'gameMode':   gameMode,
-    'gameName':   gameName,
-    'playerName': playerName,
-    'date':       date.toIso8601String(),
+    'score':        score,
+    'maxScore':     maxScore,
+    'gameMode':     gameMode,
+    'gameName':     gameName,
+    'playerName':   playerName,
+    'date':         date.toIso8601String(),
+    'opponentName': opponentName,
+    'won':          won,
+    'finalScore':   finalScore,
   };
 
   double get ratio => maxScore > 0 ? score / maxScore : 0;

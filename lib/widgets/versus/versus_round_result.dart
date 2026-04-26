@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_instance/src/extension_instance.dart';
+import '../../services/score_manager.dart';
 import '../../services/settings_manager.dart';
+import '../../stores/versus_store.dart';
 
 class VersusRoundResultScreen extends StatelessWidget {
   final bool won;
@@ -118,7 +122,8 @@ class VersusRoundResultScreen extends StatelessWidget {
 }
 
 /// Recapitulatif final du duel
-class VersusFinalRecapScreen extends StatelessWidget {
+///
+class VersusFinalRecapScreen extends StatefulWidget {
   final bool won;
   final int myWins;
   final int opponentWins;
@@ -135,11 +140,42 @@ class VersusFinalRecapScreen extends StatelessWidget {
   });
 
   @override
+  State<VersusFinalRecapScreen> createState() => _VersusFinalRecapScreenState();
+}
+
+class _VersusFinalRecapScreenState extends State<VersusFinalRecapScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _saveScore();
+    if (widget.won) {
+      settingsManager.playVictory();
+    } else {
+      settingsManager.playDefeat();
+    }
+  }
+
+  Future<void> _saveScore() async {
+    final opponentName = Get.find<VersusStore>().bluetoothService.connectedPlayer?.value?.name ?? 'Adversaire';
+
+    await scoreManager.saveScore(
+      score:        widget.myWins * 100 + 50, // Score pondéré
+      maxScore:     (widget.myWins + widget.opponentWins) * 100,
+      gameMode:     'duo',
+      playerName:   settingsManager.playerName,
+      gameName:     'VERSUS',
+      opponentName: opponentName,
+      won:          widget.won,
+      finalScore:   '${widget.myWins}-${widget.opponentWins}',
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     const Color primaryBlue = Color(0xFF001A33);
     const Color royalGold = Color(0xFFD4AF37);
 
-    if (won) {
+    if (widget.won) {
       settingsManager.playVictory();
     } else {
       settingsManager.playDefeat();
@@ -155,20 +191,20 @@ class VersusFinalRecapScreen extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 40),
-              Text(won ? '🏆 VICTOIRE !' : '💪 BIEN JOUÉ !', style: TextStyle(color: won ? royalGold : Colors.orange, fontSize: 32, letterSpacing: 3))
+              Text(widget.won ? '🏆 VICTOIRE !' : '💪 BIEN JOUÉ !', style: TextStyle(color: widget.won ? royalGold : Colors.orange, fontSize: 32, letterSpacing: 3))
                   .animate().scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1), duration: 500.ms, curve: Curves.elasticOut),
               const SizedBox(height: 16),
-              Text('Score final: $myWins - $opponentWins', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+              Text('Score final: ${widget.myWins} - ${widget.opponentWins}', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 30),
-                  itemCount: roundResults.length,
+                  itemCount: widget.roundResults.length,
                   itemBuilder: (context, index) {
-                    final r = roundResults[index];
+                    final r = widget.roundResults[index];
                     final game = r['game'] as String;
                     final hostWon = r['hostWon'] as bool;
-                    final iWon = isHost ? hostWon : !hostWon;
+                    final iWon = widget.isHost ? hostWon : !hostWon;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),

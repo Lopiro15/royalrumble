@@ -8,6 +8,7 @@ import 'versus/versus_lobby_screen.dart';
 import '../services/settings_manager.dart';
 import '../stores/versus_store.dart';
 import '../widgets/menu_button.dart';
+import 'scores_screen.dart';
 
 class PlayMenuScreen extends StatelessWidget {
   const PlayMenuScreen({super.key});
@@ -135,7 +136,10 @@ class PlayMenuScreen extends StatelessWidget {
             icon: Icons.emoji_events_rounded,
             color: Colors.white.withOpacity(0.9),
             textColor: blue,
-            onTap: () => settingsManager.playClick(),
+            onTap: () {
+              settingsManager.playClick();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ScoresScreen()));
+            },
           ).animate().fadeIn(delay: 800.ms).slideX(begin: 0.2),
         ],
       ),
