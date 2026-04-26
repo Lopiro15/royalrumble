@@ -21,11 +21,15 @@ import 'quiz_result_screen.dart';
 class QuizGameScreen extends StatefulWidget {
   final String gameMode;
   final Function(int score, int maxScore)? onSoloGameFinished;
+  final Function(int score, bool isDead)? onVersusGameFinished;
+  final List<int>? forcedSequence; // Séquence forcée pour le Versus (mêmes questions)
 
   const QuizGameScreen({
     super.key,
     required this.gameMode,
     this.onSoloGameFinished,
+    this.onVersusGameFinished,
+    this.forcedSequence,
   });
 
   @override
@@ -45,6 +49,7 @@ class _QuizGameScreenState extends State<QuizGameScreen>
   bool _showFeedback      = false;
   bool _lastAnswerCorrect = false;
   bool _transitioning     = false;
+  DateTime? _finishTime; // Pour le Versus : savoir qui a fini en premier
 
   late final List<int> _questionSequence;
   late final List<int> _questionIndices;
@@ -62,7 +67,12 @@ class _QuizGameScreenState extends State<QuizGameScreen>
   @override
   void initState() {
     super.initState();
-    _questionSequence = _generateSequence();
+    if (widget.forcedSequence != null) {
+      _questionSequence = List.from(widget.forcedSequence!);
+    } else {
+      _questionSequence = _generateSequence();
+    }
+
     _questionIndices = List.generate(
       _totalQuestions,
           (i) => _getNextQuestionIndex(_questionSequence[i]),
@@ -121,7 +131,6 @@ class _QuizGameScreenState extends State<QuizGameScreen>
 
   void _onAnswered(int pointsEarned) {
     if (!mounted || _transitioning) return;
-
     setState(() {
       _score             += pointsEarned;
       _pointsJustEarned   = pointsEarned;
@@ -129,12 +138,10 @@ class _QuizGameScreenState extends State<QuizGameScreen>
       _showFeedback       = true;
       _transitioning      = true;
     });
-
     if (pointsEarned > 0) {
       _scoreAnim.reset();
       _scoreAnim.forward();
     }
-
     Future.delayed(const Duration(milliseconds: 1000), () {
       if (!mounted) return;
       setState(() {
@@ -147,28 +154,33 @@ class _QuizGameScreenState extends State<QuizGameScreen>
   }
 
   void _finishGame() {
+    _finishTime = DateTime.now();
     final int maxScore = _totalQuestions * 100;
 
-    // Notifier le mode solo AVANT la navigation
+    // Notifier le mode solo
     if (widget.gameMode == 'solo') {
       widget.onSoloGameFinished?.call(_score, maxScore);
     }
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => QuizResultScreen(
-          score:    _score,
-          maxScore: maxScore,
-          quizName: 'QUIZ',
-          gameMode: widget.gameMode,
-          onSoloGameFinished: widget.onSoloGameFinished,
+    // Notifier le mode Versus
+    if (widget.onVersusGameFinished != null) {
+      widget.onVersusGameFinished!(_score, false);
+    }
+
+    // Navigation vers l'écran de résultat
+    if (widget.gameMode != 'duo') {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => QuizResultScreen(
+            score: _score, maxScore: maxScore, quizName: 'QUIZ',
+            gameMode: widget.gameMode, onSoloGameFinished: widget.onSoloGameFinished,
+          ),
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 600),
         ),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 600),
-      ),
-    );
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -181,6 +193,29 @@ class _QuizGameScreenState extends State<QuizGameScreen>
     const Color royalGold   = Color(0xFFD4AF37);
 
     if (_currentIndex >= _totalQuestions) {
+      // En mode Versus, afficher "En attente de l'adversaire"
+      if (widget.onVersusGameFinished != null) {
+        return Scaffold(
+          backgroundColor: primaryBlue,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.check_circle, color: Colors.greenAccent, size: 80),
+                const SizedBox(height: 20),
+                Text('Quiz terminé ! Score: $_score pts',
+                    style: const TextStyle(color: Colors.white, fontSize: 22)),
+                const SizedBox(height: 16),
+                const SizedBox(width: 30, height: 30,
+                    child: CircularProgressIndicator(color: Color(0xFFD4AF37), strokeWidth: 2.5)),
+                const SizedBox(height: 12),
+                const Text('En attente de l\'adversaire...',
+                    style: TextStyle(color: Colors.white54, fontSize: 14)),
+              ],
+            ),
+          ),
+        );
+      }
       return const Scaffold(
         backgroundColor: Color(0xFF001A33),
         body: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
@@ -193,8 +228,7 @@ class _QuizGameScreenState extends State<QuizGameScreen>
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end:   Alignment.bottomCenter,
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
             colors: [Color(0xFF002147), primaryBlue],
           ),
         ),
@@ -208,11 +242,8 @@ class _QuizGameScreenState extends State<QuizGameScreen>
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 350),
                       transitionBuilder: (child, anim) => SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0.08, 0),
-                          end:   Offset.zero,
-                        ).animate(CurvedAnimation(
-                            parent: anim, curve: Curves.easeOutCubic)),
+                        position: Tween<Offset>(begin: const Offset(0.08, 0), end: Offset.zero)
+                            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
                         child: FadeTransition(opacity: anim, child: child),
                       ),
                       child: _buildCurrentQuestion(),
