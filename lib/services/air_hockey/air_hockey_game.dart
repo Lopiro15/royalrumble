@@ -20,10 +20,15 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   bool isGameOver = false;
   int? winner;
 
+  int p1TotalGoals = 0;
+  int p2TotalGoals = 0;
+
   final Function(int score, int maxScore)? onSoloGameFinished;
   bool _hasNotifiedSolo = false;
 
-  // Score maximum pour Air Hockey (7 points pour gagner)
+  // CORRECTION : 4 paramètres
+  void Function(int score, bool isDead, int goalsFor, int goalsAgainst)? onVersusFinished;
+
   static const int maxPossibleScore = 7;
 
   AirHockeyGame({this.onSoloGameFinished});
@@ -87,12 +92,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
       position: Vector2(size.x - 20, (size.y / 2) - 50),
       anchor: Anchor.topRight,
       textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Colors.blueAccent,
-          fontSize: 48,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Luckiest Guy',
-        ),
+        style: const TextStyle(color: Colors.blueAccent, fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'Luckiest Guy'),
       ),
     )..add(ScoreListener(p2Score)));
 
@@ -101,12 +101,7 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
       position: Vector2(size.x - 20, (size.y / 2) + 50),
       anchor: Anchor.bottomRight,
       textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Color(0xFFD4AF37),
-          fontSize: 48,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Luckiest Guy',
-        ),
+        style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'Luckiest Guy'),
       ),
     )..add(ScoreListener(p1Score)));
   }
@@ -156,7 +151,13 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
 
   void onGoal(int scoringPlayer) {
     if (isGameOver) return;
-    if (scoringPlayer == 1) p1Score.value++; else p2Score.value++;
+    if (scoringPlayer == 1) {
+      p1Score.value++;
+      p1TotalGoals++;
+    } else {
+      p2Score.value++;
+      p2TotalGoals++;
+    }
     settingsManager.playClick();
     _checkWinCondition();
     if (!isGameOver) _resetPositions();
@@ -176,11 +177,13 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
     winner = winnerNum;
     pauseEngine();
 
-    // Notifier le mode solo
     if (onSoloGameFinished != null && !_hasNotifiedSolo) {
       _hasNotifiedSolo = true;
       onSoloGameFinished!(p1Score.value, maxPossibleScore);
     }
+
+    // 4 paramètres : score, isDead, goalsFor, goalsAgainst
+    onVersusFinished?.call(p1Score.value, winnerNum != 1, p1TotalGoals, p2TotalGoals);
 
     overlays.add('GameOver');
     if (winnerNum == 1) settingsManager.playVictory(); else settingsManager.playDefeat();
@@ -189,6 +192,8 @@ class AirHockeyGame extends FlameGame with PanDetector, HasCollisionDetection {
   void restart() {
     p1Score.value = 0;
     p2Score.value = 0;
+    p1TotalGoals = 0;  // ← AJOUTÉ
+    p2TotalGoals = 0;  // ← AJOUTÉ
     isGameOver = false;
     winner = null;
     _hasNotifiedSolo = false;
