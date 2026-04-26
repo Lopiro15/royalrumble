@@ -1,31 +1,30 @@
 import 'dart:math';
-import 'package:get/get.dart';
-import '../bluetooth/bluetooth_service.dart';
 import '../bluetooth/bluetooth_game_handler.dart';
 
 class VersusGameManager {
-  final BluetoothService bluetoothService;
+  final bool isHost;
   final VersusGameConfig config;
-  final bool isHost; // Le joueur qui a initié le défi
 
-  // Scores
-  final RxInt hostWins = 0.obs;
-  final RxInt guestWins = 0.obs;
-  final RxInt currentRound = 0.obs;
-  final RxBool isMatchOver = false.obs;
+  int hostWins = 0;
+  int guestWins = 0;
+  int currentRound = 0;
+  bool isMatchOver = false;
 
   // Jeux pour chaque manche
   final List<String> roundGames = [];
 
+  // Résultats de chaque manche
+  final List<Map<String, dynamic>> roundResults = [];
+
   // Jeux disponibles (hors Labyrinth)
   static const List<String> availableGames = [
-    'QUIZ',
     'CAR ROYAL',
     'METEOR SHOWER',
     'PUZZLE ROYAL',
     'TOUR D\'HANOI',
     'SQUARE CONQUEST',
     'AIR HOCKEY',
+    'QUIZ',
   ];
 
   // Jeux pour la manche décisive
@@ -35,72 +34,79 @@ class VersusGameManager {
   ];
 
   VersusGameManager({
-    required this.bluetoothService,
-    required this.config,
     required this.isHost,
+    required this.config,
   }) {
     _generateGameSequence();
   }
 
   void _generateGameSequence() {
     final random = Random();
-    final List<String> normalGames = List.from(availableGames);
-    normalGames.shuffle(random);
+    final List<String> games = List.from(availableGames);
+    games.shuffle(random);
 
-    // Réserver un jeu décisif (pas utilisé dans les manches normales)
+    // Réserver un jeu décisif
     final String decisiveGame = decisiveGames[random.nextInt(decisiveGames.length)];
 
-    // Calculer le nombre de manches non décisives
-    final int normalRounds = config.totalRounds - 1; // -1 pour la manche décisive
+    // Retirer le jeu décisif de la liste des jeux normaux
+    games.remove(decisiveGame);
 
-    // Sélectionner les jeux sans doublon
     roundGames.clear();
     int gameIndex = 0;
 
     for (int i = 0; i < config.totalRounds; i++) {
-      // La dernière manche est la décisive si nécessaire
-      // (on vérifie si une manche décisive est possible)
-      if (i == config.totalRounds - 1 && config.totalRounds > 1) {
+      if (i == config.totalRounds - 1) {
+        // Dernière manche = manche décisive
         roundGames.add(decisiveGame);
+      } else if (gameIndex < games.length) {
+        roundGames.add(games[gameIndex]);
+        gameIndex++;
       } else {
-        if (gameIndex < normalGames.length && normalGames[gameIndex] != decisiveGame) {
-          roundGames.add(normalGames[gameIndex]);
-          gameIndex++;
-        } else {
-          // Fallback
-          roundGames.add(normalGames[gameIndex + 1 < normalGames.length ? gameIndex + 1 : 0]);
-        }
+        // Fallback
+        roundGames.add(games[0]);
+        gameIndex = 0;
       }
     }
+
+    debugPrint('🎮 Séquence de jeux: ${roundGames.join(" → ")}');
   }
 
   String get currentGameName =>
-      currentRound.value < roundGames.length ? roundGames[currentRound.value] : 'AIR HOCKEY';
+      currentRound < roundGames.length ? roundGames[currentRound] : 'AIR HOCKEY';
 
   bool get isDecisiveRound =>
-      hostWins.value == config.winsNeeded - 1 && guestWins.value == config.winsNeeded - 1;
+      hostWins == config.winsNeeded - 1 && guestWins == config.winsNeeded - 1;
+
+  int get myWins => isHost ? hostWins : guestWins;
+  int get opponentWins => isHost ? guestWins : hostWins;
+  bool get amIWinner => isHost ? hostWins >= config.winsNeeded : guestWins >= config.winsNeeded;
+  bool get isMatchPoint => myWins == config.winsNeeded - 1 || opponentWins == config.winsNeeded - 1;
 
   void recordRoundWin(bool hostWon) {
     if (hostWon) {
-      hostWins.value++;
+      hostWins++;
     } else {
-      guestWins.value++;
+      guestWins++;
     }
 
-    if (hostWins.value >= config.winsNeeded || guestWins.value >= config.winsNeeded) {
-      isMatchOver.value = true;
+    roundResults.add({
+      'round': currentRound,
+      'game': currentGameName,
+      'hostWon': hostWon,
+      'hostWins': hostWins,
+      'guestWins': guestWins,
+    });
+
+    currentRound++;
+
+    if (hostWins >= config.winsNeeded || guestWins >= config.winsNeeded) {
+      isMatchOver = true;
     }
+
+    debugPrint('📊 Manche $currentRound terminée - Hôte: $hostWins, Invité: $guestWins');
   }
 
-  int get myWins => isHost ? hostWins.value : guestWins.value;
-  int get opponentWins => isHost ? guestWins.value : hostWins.value;
-  bool get amIWinner => isHost ? hostWins.value >= config.winsNeeded : guestWins.value >= config.winsNeeded;
-
-  Map<String, dynamic> createMessage(VersusMessageType type, {Map<String, dynamic>? data}) {
-    return {
-      'type': type.name,
-      'data': data ?? {},
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
+  void debugPrint(String message) {
+    print('[VersusManager] $message');
   }
 }

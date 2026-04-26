@@ -1,13 +1,18 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../stores/versus_store.dart';
 import '../../services/settings_manager.dart';
-import '../quiz/quiz_game_screen.dart';
-import '../play_menu_screen.dart';
+import '../car_game/car_game_screen.dart';
+import '../meteor_game/meteor_game_screen.dart';
+import '../puzzle_game/puzzle_game_screen.dart';
+import '../hanoi_game/hanoi_game_screen.dart';
+import '../square_game/square_game_screen.dart';
+import '../air_hockey/air_hockey_screen.dart';
+import '../quiz/quiz_tutorial_screen.dart';
 
 class VersusGameScreen extends StatefulWidget {
-  const VersusGameScreen({super.key});
+  final String gameName;
+  const VersusGameScreen({super.key, required this.gameName});
 
   @override
   State<VersusGameScreen> createState() => _VersusGameScreenState();
@@ -16,197 +21,140 @@ class VersusGameScreen extends StatefulWidget {
 class _VersusGameScreenState extends State<VersusGameScreen> {
   final VersusStore store = Get.find<VersusStore>();
 
-  bool _roundEnded = false;
   int? _myScore;
-  DateTime? _myFinishTime;
   int? _opponentScore;
-  DateTime? _opponentFinishTime;
-  bool _resultShown = false;
+  bool _iFinished = false;
+  bool _opponentFinished = false;
   String _myName = '';
   String _opponentName = '';
 
-  // Séquence de questions synchronisée (seed commune)
-  late final List<int> _syncedSequence;
-  late final int _syncedSeed;
-
-  String get _gameType => 'quizScore';
+  String get _gameType {
+    switch (widget.gameName) {
+      case 'CAR ROYAL': return 'carScore';
+      case 'METEOR SHOWER': return 'meteorScore';
+      case 'PUZZLE ROYAL': return 'puzzleScore';
+      case 'TOUR D\'HANOI': return 'hanoiScore';
+      case 'SQUARE CONQUEST': return 'squareScore';
+      case 'AIR HOCKEY': return 'airHockeyScore';
+      case 'QUIZ': return 'quizScore';
+      default: return 'carScore';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _myName = settingsManager.playerName;
     _opponentName = store.bluetoothService.connectedPlayer?.value?.name ?? 'Adversaire';
-
-    // Générer une seed commune pour les mêmes questions
-    _syncedSeed = (_myName + _opponentName).hashCode.abs();
-    _syncedSequence = _generateSequenceFromSeed(_syncedSeed);
-
     _setupListener();
-
-    // Envoyer la seed pour synchro
-    store.bluetoothService.sendMessage({
-      'type': 'quizSetup',
-      'data': {'seed': _syncedSeed},
-    });
-  }
-
-  List<int> _generateSequenceFromSeed(int seed) {
-    final rand = Random(seed);
-    final List<int> availableTypes = [0, 1, 2, 3, 4];
-    final List<int> seq = List.from(availableTypes);
-    while (seq.length < 10) {
-      seq.add(availableTypes[rand.nextInt(availableTypes.length)]);
-    }
-    seq.shuffle(rand);
-    return seq;
   }
 
   void _setupListener() {
     store.bluetoothService.onMessageReceived = (message) {
-      if (_roundEnded) return;
       final type = message['type'] as String?;
       final data = message['data'] as Map<String, dynamic>?;
 
-      if (type == 'quizSetup') {
-        final seed = data?['seed'] as int?;
-        if (seed != null && _syncedSequence.isEmpty) {
-          _syncedSequence = _generateSequenceFromSeed(seed);
-        }
-      }
-
       if (type == _gameType) {
+        debugPrint('📩 Score adverse reçu: ${data?['score']}');
         _opponentScore = data?['score'] as int?;
-        final finishMillis = data?['finishTime'] as int?;
-        _opponentFinishTime = finishMillis != null ? DateTime.fromMillisecondsSinceEpoch(finishMillis) : null;
+        _opponentFinished = true;
 
-        if (_myScore != null && !_resultShown && mounted) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (!_resultShown && mounted) _showResult();
-          });
+        if (_iFinished && _opponentFinished) {
+          _finishRound();
         }
       }
     };
   }
 
-  void _onMyGameFinished(int score, bool isDead) {
-    if (_myScore != null) return;
+  void _onMyGameFinished(int score, [bool? isDead, int? goalsFor, int? goalsAgainst]) {
+    if (_iFinished) return;
     _myScore = score;
-    _myFinishTime = DateTime.now();
+    _iFinished = true;
 
-    store.bluetoothService.sendMessage({
+    debugPrint('🏁 J\'ai fini - Score: $score');
+
+    // Envoyer mon score
+    final msg = <String, dynamic>{
       'type': _gameType,
-      'data': {
-        'score': score,
-        'finishTime': _myFinishTime!.millisecondsSinceEpoch,
-      },
-    });
+      'data': {'score': score, 'finished': true},
+    };
+    store.bluetoothService.sendMessage(msg);
 
-    if (_opponentScore != null && !_resultShown && mounted) {
+    if (_opponentFinished) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (!_resultShown && mounted) _showResult();
+        if (mounted) _finishRound();
       });
     }
   }
 
-  void _showResult() {
-    if (_resultShown) return;
-    _resultShown = true;
-
+  void _finishRound() {
     final myScore = _myScore ?? 0;
     final oppScore = _opponentScore ?? 0;
+    final isHost = store.gameManager?.value?.isHost ?? true;
 
-    bool won;
-    if (myScore > oppScore) {
-      won = true;
-    } else if (oppScore > myScore) {
-      won = false;
-    } else {
-      // Égalité : le premier qui a fini gagne
-      if (_myFinishTime != null && _opponentFinishTime != null) {
-        won = _myFinishTime!.isBefore(_opponentFinishTime!);
-      } else if (_myFinishTime != null) {
-        won = true; // J'ai fini, pas l'autre
-      } else {
-        won = false;
-      }
+    debugPrint('📊 Comparaison - Moi: $myScore, Adv: $oppScore');
+
+    // Déterminer le gagnant
+    bool hostWon;
+
+    switch (widget.gameName) {
+      case 'CAR ROYAL':
+      case 'METEOR SHOWER':
+      case 'AIR HOCKEY':
+        hostWon = myScore > oppScore;
+        break;
+      case 'TOUR D\'HANOI':
+      case 'PUZZLE ROYAL':
+      case 'QUIZ':
+        hostWon = myScore >= oppScore; // Course/quiz : premier ou meilleur score
+        break;
+      case 'SQUARE CONQUEST':
+        hostWon = myScore > oppScore;
+        break;
+      default:
+        hostWon = myScore > oppScore;
     }
 
-    if (won) {
-      settingsManager.playVictory();
-    } else {
-      settingsManager.playDefeat();
-    }
+    debugPrint('📊 hostWon: $hostWon (isHost: $isHost)');
 
-    String myTime = _myFinishTime != null ? '${_myFinishTime!.minute}:${_myFinishTime!.second.toString().padLeft(2, '0')}' : 'En cours';
-    String oppTime = _opponentFinishTime != null ? '${_opponentFinishTime!.minute}:${_opponentFinishTime!.second.toString().padLeft(2, '0')}' : 'En cours';
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF001A33),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: won ? const Color(0xFFD4AF37) : Colors.redAccent, width: 2),
-        ),
-        title: Text(won ? '🏆 VICTOIRE !' : '😓 DÉFAITE...', textAlign: TextAlign.center,
-            style: TextStyle(color: won ? const Color(0xFFD4AF37) : Colors.redAccent, fontSize: 24)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(won ? Icons.emoji_events : Icons.sentiment_dissatisfied,
-              color: won ? const Color(0xFFD4AF37) : Colors.redAccent, size: 60),
-          const SizedBox(height: 20),
-          Text('$_myName (🟡): $myScore pts ($myTime)',
-              style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 16, fontWeight: FontWeight.bold)),
-          Text('$_opponentName (🔵): $oppScore pts ($oppTime)',
-              style: const TextStyle(color: Colors.blueAccent, fontSize: 16)),
-          if (myScore == oppScore) ...[
-            const SizedBox(height: 8),
-            Text(won ? '⚡ Victoire au temps !' : '⚡ Défaite au temps...',
-                style: TextStyle(color: won ? Colors.greenAccent : Colors.redAccent, fontSize: 13)),
-          ],
-        ]),
-        actions: [
-          Center(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: const Text('CONTINUER'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: const Color(0xFF001A33)),
-              onPressed: () {
-                Navigator.pop(ctx);
-                store.disconnectAndReset();
-                Get.offAll(() => const PlayMenuScreen());
-              },
-            ),
-          ),
-        ],
-      ),
+    store.onRoundFinished(
+      hostWon: hostWon,
+      hostScore: isHost ? myScore : oppScore,
+      guestScore: isHost ? oppScore : myScore,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: const Color(0xFF001A33),
-              title: const Text('Quitter ?', style: TextStyle(color: Colors.white)),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ANNULER')),
-                TextButton(onPressed: () { Navigator.pop(ctx); store.bluetoothService.sendMessage({'type': 'disconnect', 'data': {}}); store.disconnectAndReset(); Get.offAll(() => const PlayMenuScreen()); }, child: const Text('QUITTER', style: TextStyle(color: Colors.redAccent))),
-              ],
-            ),
-          );
-        }
-      },
-      child: QuizGameScreen(
-        gameMode: 'duo',
-        onVersusGameFinished: _onMyGameFinished,
-        forcedSequence: _syncedSequence,
-      ),
-    );
+    // Routeur de jeu
+    switch (widget.gameName) {
+      case 'CAR ROYAL':
+        return CarGameScreen(onVersusGameFinished: (score, isDead) => _onMyGameFinished(score, isDead));
+      case 'METEOR SHOWER':
+        return MeteorGameScreen(onVersusGameFinished: (score, isDead) => _onMyGameFinished(score, isDead));
+      case 'PUZZLE ROYAL':
+        return PuzzleGameScreen(onVersusGameFinished: (score, isDead) => _onMyGameFinished(score, isDead));
+      case 'TOUR D\'HANOI':
+        return HanoiGameScreen(onVersusGameFinished: (score, isDead) => _onMyGameFinished(score, isDead));
+      case 'SQUARE CONQUEST':
+        return SquareGameScreen(
+          vsBot: false,
+          isVersusMode: true,
+          startsFirst: _myName.compareTo(_opponentName) <= 0,
+          myName: _myName,
+          opponentName: _opponentName,
+          isMyTurn: _myName.compareTo(_opponentName) <= 0,
+          onVersusGameFinished: (score, isDead) => _onMyGameFinished(score, isDead),
+          onMoveMade: (row, col) {
+            store.bluetoothService.sendMessage({'type': 'squareMove', 'data': {'row': row, 'col': col}});
+          },
+        );
+      case 'AIR HOCKEY':
+        return AirHockeyScreen(vsBot: true, onVersusGameFinished: (score, isDead, goalsFor, goalsAgainst) => _onMyGameFinished(score, isDead));
+      case 'QUIZ':
+        return QuizTutorialScreen(gameMode: 'duo', onSoloGameFinished: (score, maxScore) => _onMyGameFinished(score));
+      default:
+        return const Center(child: Text('Jeu inconnu', style: TextStyle(color: Colors.white)));
+    }
   }
 }
